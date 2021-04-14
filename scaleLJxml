@@ -1,0 +1,691 @@
+#!/usr/bin/env python
+# scaleLJ.py - scale epsilon and sigma LJ parameters in pair.lmp LAMMPS file.
+# Agilio Padua <agilio.padua@ens-lyon.fr>
+# Kateryna Goloviznina <kateryna.goloviznina@ens-lyon.fr>
+# version 2021/04/10
+
+import sys
+import argparse
+import os
+# import xml.etree.ElementTree as ET
+from lxml import etree as ET
+
+usage = """
+==============================================================================
+Scale epsilon and sigma LJ parameters in pair.lmp LAMMPS file
+------------------------------------------------------------------------------
+Format of file containing specification of Drude oscillators 
+and polarisability values (alpha.ff):
+  # type  dm/u   dq/e  k/(kJ/molA2)  alpha/A3  a_thole
+  CT      0.4    -1.0     4184.0      1.016     2.6 
+  ...
+* dm is the mass to place on the Drude particle (taken from its core),
+* dq is the charge to place on the Drude particle (taken from its core),
+* k is the harmonic force constant of the bond between core and Drude,
+* alpha is the polarizability, hyrdogen aroms are not merged,
+* a_thole is a parameter of the Thole damping function.
+------------------------------------------------------------------------------
+Format of file containing monomers and dimers specification (fragment.ff)
+  MONOMERS
+  # name       q/e       mu/D
+  c2c1im       1.0      1.1558
+  ..
+  DIMERS
+  # m1         m2       r_COM/A    k_sapt
+  c2c1im       dca       2.935      0.61
+  ...
+* q is the charge of the monomer,
+* mu is the dipole moment of the monomer,
+* m1 and m2 are the monomers forming a dimer,
+* r_COM distance between the center of mass of the monomers,
+* k_sapt is the scaling factor for the epsilon of LJ potential, 
+obtained by SAPT quantum calculation (optional).
+------------------------------------------------------------------------------
+Format of file containing fragments list with atomic names (fragment.inp)
+  #name  atoms
+  c2c1im   NA CR CW C1 HCR C1A HCW H1
+  c4h10    C2 CS HC CT
+  ntf2     CBT F1 SBT NBT OBT
+  ...
+* atomic names associated with this fragment in field-p.lmp file. 
+------------------------------------------------------------------------------
+Script requires structure files of monomers used in fragment.inp file 
+(.zmat, .xyz, .mol, .pdb)
+==============================================================================
+"""
+
+class _Const(object):
+    
+    sigma_k = 0.985
+    
+    # C0 and C1 are coefficients to predict k
+    @staticmethod
+    def C0():
+        return 0.254952   
+    
+    @staticmethod
+    def C1():
+        return 0.106906
+
+    @staticmethod
+    def isfloat(value):
+        try:
+            float(value)
+            return True
+        except ValueError:
+            return False
+
+class FieldXML(object):
+    '''force field from OpenMM xml file'''
+
+    def __init__(self, infile):
+        '''element tree from xml file'''
+
+        self.ftree = ET.parse(infile)
+        self.root = self.ftree.getroot()
+
+    def Write(self, outfile):
+        '''write force field to xml file'''
+
+        FieldXML.IndentXml(self.root)
+        self.ftree.write(outfile)
+    
+    @staticmethod
+    def IndentXml(elem, level=0, hor=' ', ver='\n'):
+        '''pretty-print xml tree'''
+
+        spc = ver + level * hor
+        if len(elem):
+            if not elem.text or not elem.text.strip():
+                elem.text = spc + hor
+            if not elem.tail or not elem.tail.strip():
+                elem.tail = spc
+            for elem in elem:
+                FieldXML.IndentXml(elem, level + 1, hor, ver)
+            if not elem.tail or not elem.tail.strip():
+                elem.tail = spc
+        else:
+            if level and (not elem.tail or not elem.tail.strip()):
+                elem.tail = spc
+
+    def Scale(self, ff, syst, sapt, scsig):
+        try:
+            nb_fix_pair = self.root.find('LennardJonesForce').findall('NBFixPair')
+
+            if 'type1' not in nb_fix_pair[0].attrib and 'type2' not in nb_fix_pair[0].attrib:
+                raise Exception('  error: NBFixPair should be specified by types and not by classes. Use --types when running fftool')
+
+            for ij_pair in nb_fix_pair:
+                i = ij_pair.get('type1').split('-')[1]
+                j = ij_pair.get('type2').split('-')[1]
+                eps = float(ij_pair.get('epsilon'))
+                sig = float(ij_pair.get('sigma'))
+                
+                for frp in syst.fragmentpairs:
+                    if not sapt:
+                        k = frp.k_pred
+                    elif frp.k_sapt is not None:
+                        k = frp.k_sapt
+                    else:
+                        raise Exception('  error: k_sapt for {0} {1} dimer not found in {2}'.format(frp.fr1.name, frp.fr2.name, ff.filename))                   
+                    if ((i in frp.fr1.ind_range and j in frp.fr2.ind_range) or (j in frp.fr1.ind_range and i in frp.fr2.ind_range)) and k < 1:
+                        eps *= k
+                        break
+
+                if (scsig is not None):
+                    fi = next((x for x in syst.fragments if (i in x.ind_range)), None)
+                    fj = next((x for x in syst.fragments if (j in x.ind_range)), None)
+
+                    if (fi is not None and fj is not None):
+                        if fi.scale_sig and fj.scale_sig:
+                            sig *= _Const.sigma_k
+
+                ij_pair.set('epsilon', '{0:.8f}'.format(eps))
+                ij_pair.set('sigma', '{0:.8f}'.format(sig))
+
+                # for comparison with pair-p-sc.lmp
+                # print('{2:10.6f}   {3:10.6f}  # {0:s} {1:s} '.format(i,j,eps/4.184,sig*10))
+
+        except Exception as e:
+            print(e)
+            sys.exit(1)
+
+    def CheckAtoms(self,syst):
+        atoms_types_inp = [y for x in syst.fragments for y in x.ind_range]
+        atom_types_xml = [x.get('name').split('-')[1] for x in self.root.find('AtomTypes').findall('Type') if x.get('name')[0] != 'D']
+        extra_atoms = list(set(atom_types_xml) - set(atoms_types_inp))
+        if len(extra_atoms) > 0:
+            extra_atoms = ', '.join(extra_atoms)
+            print('warning: atom(s) {0:s} do/does not belong to any fragment in {1:s}'.format(extra_atoms,syst.filename))
+
+# monomer in fragment.ff        
+class Monomer (object):
+    def __init__(self, name, q, mu):
+        self.name = name
+        self.q = q
+        self.mu = mu
+
+    def __str__(self):
+        return '{0:10s}  q = {1:2d}   mu = {3:6.4f} D'.format(self.name, self.q, self.mu)
+
+# dimer in fragment.ff
+class Dimer (object):
+    def __init__(self, m1, m2):
+        self.m1 = m1
+        self.m2 = m2
+        self.r = None
+        self.k_sapt = None
+
+    def SetR(self, r):
+        self.r = r
+
+    def SetKSAPT(self,  k_sapt):
+        self.k_sapt = k_sapt 
+
+    def __str__(self):
+        res = '{0:10s} {1:10s}'.format(self.m1.name, self.m2.name)
+        if self.r is not None:
+            res += '    r = {0:6.4f}'.format(self.r)
+        if self.k_sapt is not None:
+            res += '    k_sapt = {0:4.2f}'.format(self.k_sapt)
+        return res
+
+# fragment force field from fragment.ff
+class FragmentFField(object):
+    #  read fragment.ff
+    def __init__(self, filename):
+        self.filename = filename
+        self.monomers = []
+        self.dimers= []
+        try:
+            with open(self.filename, 'r') as f:
+                for line in f:
+                    if line.startswith('#') or line.strip() == '':
+                        continue
+                    if line.lower().startswith('monomer'):
+                        section = 'monomers'
+                        continue
+                    elif line.lower().startswith('dimer'):
+                        section = 'dimers'
+                        continue
+
+                    tok = line.strip().split()
+
+                    if section == 'monomers':
+                        if tok[0].endswith('+') or tok[0].endswith('-'):    
+                            tok[0] = tok[0][:-1]
+                        name = tok[0].lower()
+                        q = float(tok[1])
+                        mu  = float (tok[2])
+
+                        if next((x for x in self.monomers if x.name == name), None) is not None:
+                            raise Exception('  error: monomer {0} is specified twice in {1}'.format(name, self.filename))
+
+                        self.monomers.append(Monomer(name, q, mu))
+                    
+                    elif section == 'dimers':
+                        for i in range(0,2):
+                            if tok[i].endswith('+') or tok[i].endswith('-'):    
+                                tok[i] = tok[i][:-1]
+                        m1_name = tok[0].lower()
+                        m2_name = tok[1].lower()
+                        r = float (tok[2])
+
+                        if next((x for x in self.dimers if (x.m1.name == m1_name and x.m2.name == m2_name) or (x.m1.name == m2_name and x.m2.name  == m1_name)), None):
+                            raise Exception('  error: dimer {0} {1} is specified twice in {2}'.format(m1_name, m2_name, self.filename))
+
+                        d = self.SetDimer(m1_name, m2_name)
+                        self.dimers.append(d)
+                        d.SetR(r)
+                        if len(tok)>3:
+                            k_sapt = float (tok[3])
+                            d.SetKSAPT(k_sapt)
+
+        except IOError:
+            print('  error: force field file {0} not found'.format(self.filename))
+            sys.exit(1)
+        except IndexError:
+            print('  error: incorrect force field file line: {0}'.format(line))
+            sys.exit(1)
+        except Exception as e:
+            print(e)
+            sys.exit(1)
+
+    # create new dimer from two monomers
+    def SetDimer(self, m1_name, m2_name):
+        try:
+            m1 = next((x for x in self.monomers if x.name == m1_name), None)
+            m2 = next((x for x in self.monomers if x.name == m2_name), None)
+            if (m1 is not None and m2 is not None):
+                d = Dimer(m1, m2)
+                return d
+            else:
+                raise Exception('  error: monomer {0} or monomer {1} not descibed in monomers section of {2}'.format(m1_name, m2_name, self.filename))
+
+        except Exception as e:
+            print(e)
+            sys.exit(1)
+
+    def __str__(self):
+        res = self.filename
+        res += '\nMONOMERS'
+        for m in self.monomers:
+            res+='\n'+str(m)
+        res += '\nDIMERS'
+        for d in self.dimers:
+            res+='\n'+str(d)
+        return res    
+
+# fragment in fragment.inp; fragment is based on monomer with index range in currect system added        
+class Fragment(Monomer):
+    def __init__(self, m, ind_range, res):
+        self.name = m.name
+        self.q = m.q
+        self.mu = m.mu
+        self.ind_range = ind_range
+        self.pol_model = res[0]
+        self.scale_eps = res[1]
+        self.scale_sig = False
+    
+    def __str__(self):
+            return '{0:10s}  q = {1:5.2f}  mu = {2:6.4f} D    Pol = {3:5s} ScaleEps = {4:5s} ScaleSig = {5:5s} Atoms={5:s} '.format(self.name, self.q, self.mu,self.pol_model, self.scale_eps, self.scale_sig, self.ind_range)
+
+    # checks if fragment is polarisable
+    @staticmethod
+    def PolExclude(m, p):
+        pol_model = False
+        scale_eps = True
+
+        if p is not None:
+            if m.name in p:
+                pol_model = True
+                if (m.q == 0 and m.mu == 0):
+                    scale_eps = False
+        
+        return (pol_model,scale_eps)
+
+    # read atoms from .mol for a given fragment
+    def GetAtomsFromMol(self, pol):
+        zfilename = self.name+'.mol'
+        with open(zfilename, 'r') as f:
+            atoms = []
+            tok = f.readline().strip().split()
+            self.name = tok[0]
+            line = f.readline() 
+            line = f.readline()
+            tok = f.readline().strip().split()   # counts line
+            natom = int(tok[0])
+            
+            for i in range(natom):
+                tok = f.readline().strip().split()
+                at_name = tok[3]
+                print(at_name)
+                atom = next((x for x in pol.atomtypes if x.name == at_name), None)
+                if atom is None:
+                    raise Exception('  error: atom type {0} not found in {1}'.format(at_name,pol.filename))
+                atoms.append(atom)
+        self.atoms = atoms
+
+    # read atoms from .pdb for a given fragment
+    def GetAtomsFromPdb(self, pol):
+        zfilename = self.name+'.pdb'
+        with open(zfilename, 'r') as f:
+            atoms = []
+            line = f.readline()
+            while 'COMPND' not in line:
+                line = f.readline()
+            tok = line.strip().split()
+            self.name = tok[1]
+            line = f.readline()
+            while not (line.startswith('ATOM') or line.startswith('HETATM')):
+                line = f.readline()
+            while 'ATOM' in line or 'HETATM' in line:
+                tok = line.strip().split()
+                at_name = tok[2]
+                atom = next((x for x in pol.atomtypes if x.name == at_name), None)
+                if atom is None:
+                    raise Exception('  error: atom type {0} not found in {1}'.format(at_name,pol.filename))
+                atoms.append(atom)
+                line = f.readline()
+        self.atoms = atoms
+
+    # read atoms from .zmat for a given fragment
+    def GetAtomsFromZmat(self, pol):
+        try:
+            zfilename = self.name+'.zmat'
+            with open(zfilename, 'r') as f:
+                atoms = []
+                line = f.readline()
+                while line.strip().startswith('#'):
+                    line = f.readline()
+                fr_name = line.strip()
+                line = f.readline()
+                while line.strip().startswith('#') or line.strip() == '':
+                    line = f.readline()
+        
+                tok = line.strip().split()
+                if len(tok) > 1:   # there can be line numbers
+                    shift = 1
+                else:
+                    shift = 0
+                while line:
+                    tok = line.strip().split()
+                    if len(tok) == 0:
+                        break
+                    at_name = tok[shift]
+                    atom = next((x for x in pol.atomtypes if x.name == at_name), None)
+                    if atom is None:
+                        raise Exception('  error: atom type {0} not found in {1}'.format(at_name,pol.filename))
+                    atoms.append(atom)
+                    line = f.readline()
+            self.atoms = atoms
+                            
+        except IOError:
+            print('  error: fragment zmat file {0} not found'.foramt(filename))
+            sys.exit(1)
+        except Exception as e:
+            print(e)
+            sys.exit(1)
+
+    # read atoms from .xyz for a given fragment
+    def GetAtomsFromXYZ(self, pol):
+        try:
+            xyzfilename = self.name+'.xyz'
+            with open(xyzfilename, 'r') as f:
+                atoms = []
+                line = f.readline()
+                while line.strip().startswith('#'):
+                    line = f.readline()
+                n_atoms = int(line.strip())
+                line = f.readline()
+                fr_name = line.strip()
+                line = f.readline()
+                while line.strip().startswith('#') or line.strip() == '':
+                    line = f.readline()
+        
+                tok = line.strip().split()
+                while line:
+                    tok = line.strip().split()
+                    if len(tok) == 0:
+                        break
+                    at_name = tok[0]
+                    atom = next((x for x in pol.atomtypes if x.name == at_name), None)
+                    if atom is None:
+                        raise Exception('  error: atom type {0} not found in {1}'.format(at_name,pol.filename))
+                    atoms.append(atom)
+                    line = f.readline()
+            self.atoms = atoms
+                            
+        except IOError:
+            print('  error: fragment zmat file {0} not found'.foramt(filename))
+            sys.exit(1)
+        except Exception as e:
+            print(e)
+            sys.exit(1)
+
+# fragment pair that is based on dimer but uses fragments (not monomers) as units            
+class FragmentPair(Dimer):
+    def __init__(self, fr1, fr2, r, k_sapt):
+        self.fr1 = fr1
+        self.fr2  = fr2
+        self.r = r
+        self.k_sapt = k_sapt
+
+    def __str__(self):
+        res = '{0:10s} {1:10s}'.format(self.fr1.name, self.fr2.name)
+        if self.r is not None:
+            res += '    r = {0:6.4f}'.format(self.r)
+        if self.k_sapt is not None:
+            res += '    k_sapt = {0:4.2f}'.format(self.k_sapt)
+        return res
+
+    # predicts k factor for a given fragment pair based on total charge, alpha, dipole moment of fragment and interfragment distance 
+    def PredictK(self):
+        alpha_fr1 = [sum(x.alpha for x in self.fr1.atoms)][0]
+        alpha_fr2 = [sum(x.alpha for x in self.fr2.atoms)][0]
+        k_pred = 1.0
+
+        if not self.fr1.pol_model:
+            k_pred += _Const.C0()*self.r*self.r*(self.fr2.q*self.fr2.q)/alpha_fr2
+            k_pred += _Const.C1()*(self.fr2.mu*self.fr2.mu)/alpha_fr2
+
+        if not self.fr2.pol_model:
+            k_pred += _Const.C0()*self.r*self.r*(self.fr1.q*self.fr1.q)/alpha_fr1
+            k_pred += _Const.C1()*(self.fr1.mu*self.fr1.mu)/alpha_fr1
+        
+        k_pred = 1/k_pred
+        self.k_pred = k_pred
+
+# atom type with polarisability value       
+class AtomType(object):
+    def __init__(self, name, alpha):
+        self.name = name
+        self.alpha = alpha
+    
+    def __str__(self):
+        return  '{0:s}    {1:6.3f}'.format(self.name, self.alpha)
+
+# polarisability values for all atom types; from alpha.ff
+class Polarisation(object):
+    def __init__(self, filename):
+        self.filename = filename
+        self.atomtypes = []
+        try:
+            with open(self.filename, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith('#') or len(line) == 0:
+                        continue
+                    tok = line.split()
+                    a_name = tok[0]
+                    a_alpha = float(tok[4])
+                    if next((x for x in self.atomtypes if x.name == a_name), None) is not None:
+                        raise Exception('  error: atom type {0} is specified twice in {1}'.format(a_name,self.filename))
+                    self.atomtypes.append(AtomType(a_name,a_alpha))
+
+        except IOError:
+            print('  error: polarisation file {0} not found'.format(self.filename))
+            sys.exit(1)
+        except Exception as e:
+            print(e)
+            sys.exit(1)
+    
+    def __str__(self):
+        res = self.filename
+        for at in self.atomtypes:
+            res += '\n' + str(at)
+        return res
+
+# system that consist of fragments from fragment.inp 
+class System(object):
+    def __init__(self, filename):
+        self.fragments = []
+        self.fragmentpairs = []
+        self.filename = filename
+    
+    # read fragments from fragment.inp    
+    def GetFragments(self, ff, p):
+        try:
+            with open(self.filename, 'r') as f:
+                for line in f:
+                    if line.startswith('#') or line.strip() == '':
+                        continue
+                    else:
+                        tok = line.strip().split()
+                        m_name = tok[0].lower()
+                        if next((x for x in self.fragments if x.name == m_name), None) is not None:
+                            raise Exception('  error: fragment {0} is specified twice in {1}'.format(m_name,self.filename))
+                        if len(tok)<2:
+                            raise Exception('  error: no atomic names for {0} fragment in {1}'.format(m_name,self.filename))
+                        ind_range = tok[1:]                       
+                        if next((x for x in ind_range if _Const.isfloat(x[0])), None) is not None:
+                            raise Exception('  error: fragment {0} requires atomic labels and not numbers in {1}'.format(m_name,self.filename))
+                    m = next((x for x in ff.monomers if x.name == m_name), None)
+                    if m is None:
+                        raise Exception('  error: fragment {0} not found in {1}'.format(m_name, ff.filename))
+                    
+                    self.fragments.append(Fragment(m,ind_range,Fragment.PolExclude(m,p)))
+
+        except IOError:
+            print('  error: fragment input file {0} not found'.format(filename))
+            sys.exit(1)
+        except Exception as e:
+            print(e)
+            sys.exit(1)
+
+    # generates fragment pairs based on fragment list; fragment pairs are not formed for ++ and -- combinations
+    def GetFragmentPairs(self, ff):
+        try:
+            i = j = 0
+            for i in range(0,len(self.fragments)):
+                for j in range(i,len(self.fragments)):
+                    if ((self.fragments[i].q * self.fragments[j].q <= 0.0) or max(abs(self.fragments[i].q),abs(self.fragments[j].q)) == 0) and (self.fragments[i].scale_eps and self.fragments[j].scale_eps) and (not self.fragments[i].pol_model or not self.fragments[j].pol_model):
+                        d = next((x for x in ff.dimers if (x.m1.name == self.fragments[i].name and x.m2.name == self.fragments[j].name) or (x.m1.name == self.fragments[j].name and x.m2.name == self.fragments[i].name)), None)
+
+                        if d is not None:
+                            self.fragmentpairs.append(FragmentPair(self.fragments[i],self.fragments[j],d.r,d.k_sapt))
+                        else:
+                            raise Exception('  error: dimer {0} {1} not found in {2}'.format(self.fragments[i].name,self.fragments[j].name, ff.filename))
+                    j+=1
+                i+=1
+        except Exception as e:
+            print(e)  
+            sys.exit(1)
+
+    def ParseScaleSigma(self, scsig):
+        
+        if len(scsig) > 0:
+            if _Const.isfloat(scsig[0]):
+                _Const.sigma_k = float(scsig[0])
+                scsig.pop(0)
+
+        if len(scsig) > 0:
+            for i in scsig:
+                fi = next((x for x in self.fragments if (x.name == i)), None)
+                if (fi is None):
+                    raise Exception('  error: fragment {0} specified with -s option not found in fragment.inp '.format(i))
+                elif fi.pol_model:
+                    raise Exception('  error: fragment {0} specified with -s option is already polarisable: sigma should not be scaled'.format(i))
+                else:
+                    fi.scale_sig = True
+        else:
+            for f in self.fragments:
+                f.scale_sig = True 
+
+   
+    def __str__(self):
+        res = self.filename
+        res+='\nFRAGMENTS'
+        for fr in self.fragments:
+            res+='\n'+str(fr)
+        res+='\nFRAGMENT PAIRS'
+        for frp in self.fragmentpairs:
+            res+='\n'+str(frp)
+        return res
+
+    # call a function to get atom list for fragments based on existing atom type 
+    def GetFragAtoms(self, pol):
+        try:
+            for fr in self.fragments:
+                if os.path.exists('./'+fr.name+'.zmat'):
+                    fr.GetAtomsFromZmat(pol)
+                elif os.path.exists('./'+fr.name+'.xyz'):
+                    fr.GetAtomsFromXYZ(pol)
+                elif os.path.exists('./'+fr.name+'.mol'):
+                    fr.GetAtomsFromMol(pol)
+                elif os.path.exists('./'+fr.name+'.pdb'):
+                    fr.GetAtomsFromPdb(pol)
+                else:
+                    raise Exception('  error: structure file (.zmat, .xyz, .pdb or .mol) for fragment {0} not found'.format(fr.name))
+         
+        except Exception as e:
+            print(e)
+            sys.exit(1)
+
+    def GetKPred(self):
+        for frp in self.fragmentpairs:
+            frp.PredictK()
+
+# print report to screen
+def PrintReport(syst, sapt, scsig, polarisable):
+    report = "Epsilon LJ coefficients were scaled by "
+    if sapt:
+        report += "k_sapt"
+    else:
+        report += "k_pred"
+    report += " parameter"
+    if polarisable is not None:
+        tmp = ', '.join(polarisable)
+        report += ". Fragment(s) {0} was/were already polarisable ".format(tmp)
+
+    report += "\nSigma LJ coefficients "
+    if scsig is None:
+        report += "were not scaled."
+    else: 
+        report +="were scaled by {:5.3f} value.".format(_Const.sigma_k)
+        
+        if all([x.scale_sig for x in syst.fragments]):
+            report += " All fragments were scaled."
+        else:
+            sig_list = [f.name for f in syst.fragments if f.scale_sig]
+            tmp = ', '.join(sig_list)
+            report += " Only {0} fragment(s) was/were scaled.".format(tmp)
+        
+    report += '\n------------------------------------------\n'
+
+    report += 'Fragment_i   Fragment_j   k_sapt'
+    if not sapt:
+        report += '    k_pred'
+
+    for frp in syst.fragmentpairs:
+        report += '\n{0:10s}   {1:10s}'.format(frp.fr1.name, frp.fr2.name)
+        if sapt:
+            report += '  {0:6.2f}'.format(frp.k_sapt)
+        elif frp.k_sapt is None:
+            report += '        {0:s}    {1:6.2f}'.format('-',frp.k_pred)
+        else:
+            report += '   {0:6.2f}    {1:6.2f}'.format(frp.k_sapt,frp.k_pred)
+
+    report += '\n------------------------------------------'
+    print(report)
+
+def main():
+    parser = argparse.ArgumentParser(description = usage, formatter_class = argparse.RawTextHelpFormatter)
+    parser.add_argument('-f', '--ff_filename', type=str, default = 'fragment.ff', help = 'fragment force field (default: fragment.ff)')
+    parser.add_argument('-a', '--alpha_filename', type=str, default = 'alpha.ff', help = 'polarisability values file (default: alpha.ff)')
+    parser.add_argument('-i', '--input_filename', type=str, default = 'fragment.inp', help = 'fragment input file with atomic indices (default: fragment.inp)')
+    parser.add_argument('-ix', '--inxml', default = 'field-p.xml', help = 'input OpenMM xml file (default: field-p.xml)')
+    parser.add_argument('-ox', '--outxml', default = 'field-p-sc.xml', help = 'output OpenMM xml file (default: field-p-sc.xml)')
+    parser.add_argument('-q', '--sapt', action = 'store_true', help = 'use sapt calculated k values, default: use predicted k values')
+    parser.add_argument('-s', '--scsig', nargs='*', type = str,  help = 'scale sigma if specified; default value: 0.985; \n\
+    -s                       - scale all fragments\' sigma by 0.985 \n\
+    -s value                 - scale all fragments\' sigma by user-defined value \n\
+    -s name1 name2 ...       - scale the specified fragments\' sigma by 0.985 \n\
+    -s value name1 name2 ... - scale the specified fragments\' sigma by user-defined value')
+    parser.add_argument('-p', '--polarisable', nargs='+', type = str, help = 'already polarisable monomers')
+
+    args = parser.parse_args()
+
+    ff = FragmentFField(args.ff_filename)
+    syst = System(args.input_filename)
+    syst.GetFragments(ff,args.polarisable)
+
+    if args.scsig is not None:
+        syst.ParseScaleSigma(args.scsig)
+
+    syst.GetFragmentPairs(ff)
+
+    if (not args.sapt):
+        pol = Polarisation(args.alpha_filename)
+        syst.GetFragAtoms(pol)
+        syst.GetKPred()
+    
+    field = FieldXML(args.inxml)
+    field.CheckAtoms(syst)
+    field.Scale(ff,syst,args.sapt,args.scsig)
+    field.Write(args.outxml)
+
+    PrintReport(syst,args.sapt,args.scsig,args.polarisable)
+    
+if __name__ == '__main__':
+    main()
