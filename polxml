@@ -105,8 +105,26 @@ class PDB(object):
         natoms = len(self.atoms)
         random.seed(1234)
         i = 0
+        prevseq = 1
+        resdp = []
         while i < natoms:
             atom = self.atoms[i]
+            if atom['seq'] > 1 and atom['seq'] != prevseq or i == natoms - 1:
+                if i == natoms - 1:
+                    i += 1
+                for dp in reversed(resdp):
+                    self.atoms.insert(i, dp)
+                n = len(resdp)
+                # increment indices in bonds
+                for bond in self.bonds:
+                    if bond['i'] >= i:
+                        bond['i'] += n
+                    if bond['j'] >= i:
+                        bond['j'] += n
+                i += n
+                natoms += n
+                resdp = []
+                prevseq = atom['seq']
             for dp in dplist:
                 if atom['mol'] == dp['mol'] and atom['name'] == dp['core']:
                     ndp = {}
@@ -117,15 +135,9 @@ class PDB(object):
                     ndp['y'] = atom['y'] + eps * (2*random.random() - 1.0)
                     ndp['z'] = atom['z'] + eps * (2*random.random() - 1.0)
                     ndp['ele'] = 'EP'
-                    i += 1
-                    self.atoms.insert(i, ndp)
-                    natoms += 1
-                    # increment indices in bonds
-                    for bond in self.bonds:
-                        if bond['i'] >= i:
-                            bond['i'] += 1
-                        if bond['j'] >= i:
-                            bond['j'] += 1
+                    resdp.append(ndp)
+                    #self.atoms.insert(i, ndp)
+                    #natoms += 1
                     # no need to add DC-CP bonds
                     #self.bonds.append({'i': i - 1, 'j': i})
                     break
@@ -276,7 +288,8 @@ class Forcefield(object):
                             dp.set('name', 'D' + atname)
                             dp.set('type', 'D-' + attype)
                             dp.set('charge', '{0:.5f}'.format(dt['dq']))
-                            residue.insert(i, dp)
+                            #residue.insert(i, dp)
+                            residue.append(dp)
                             # no need to add DC-DP bonds
                             #bd = ET.Element('Bond')
                             #bd.set('atomName1', atname)
