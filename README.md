@@ -1,3 +1,3 @@
-# pol_openmm
+# CL&Pol Force Field in XML Format
 
-CL&Pol force field in xml format.
+Tools to use the CL&Pol force field in OpenMM.
