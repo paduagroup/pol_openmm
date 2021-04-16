@@ -44,7 +44,7 @@ Therefore OpenMM should be compiled from source, which is straightforward (instr
 The Jean Zay machine has V100 cards, so the recipe for the PSMN may well work there. I don't know what CUDA version they have.
 
 
-## OpenMM Compilation
+## Compilation of OpenMM
 
 1. Install `miniconda3`, with `numpy` and not much else, since the PSMN machines already have most of the tools needed by OpenMM (`SWIG`, `Doxygen`, etc.) This will provide a local python installation for OpenMM. Activate `conda` if not by default:
 
@@ -107,9 +107,9 @@ The Jean Zay machine has V100 cards, so the recipe for the PSMN may well work th
 That's it. This build should also work for OpenMM 7.4.2.
 
 
-## Compiling the TGNH Drude thermostat
+## TGNH Drude thermostat (OpenMM 7.4.2)
 
-The TGNH thermostat (http://doi.org/10.1021/acs.jpclett.9b02983) is a plugin to OpenMM 7.4.2. The authors are in the process of upgrading to the latest OpenMM 7.5.
+The temperature-grouped Nosé-Hoover thermostat (http://doi.org/10.1021/acs.jpclett.9b02983) is a plugin to OpenMM 7.4.2. The authors are in the process of upgrading it to the latest OpenMM 7.5 but gave no estimated date.
 
 1. Download or `git clone` the plugin from https://github.com/scychon/openmm_drudeNose
 
@@ -137,13 +137,4 @@ The TGNH thermostat (http://doi.org/10.1021/acs.jpclett.9b02983) is a plugin to 
 
 Done.
 
-## Choice of OpenMM version and Drude thermostat
-
-Although the TGNH thermostat is certainly superior, I couldn't make it run with our `xml` input files, which run fine in the latest OpenMM 7.5. So there are some bugs or incomplete implementations in OpenMM 7.4.2.
-
-I suspect the authors of the TGNH will in sometime update to OpenMM 7.5, so it's probably not worth the effort to reverse engineer the force field file formats that would run in OpenMM 7.4.2.
-
-As a result, I would opt to use the default Drude thermostats that come with OpenMM 7.5. Maybe these are not the very best for transport properties but they may be ok for structural quantities.
-
-Also, the Langevin thermostats can be considerably faster than Nosé-Hoover, also in their Drude versions. 
 
