@@ -1,0 +1,12 @@
+diff -urN openmm-7.5.0/platforms/cuda/src/CudaContext.cpp my-openmm-7-5-0/platforms/cuda/src/CudaContext.cpp
+--- openmm-7.5.0/platforms/cuda/src/CudaContext.cpp	2020-11-25 06:39:09.000000000 +0100
++++ my-openmm-7-5-0/platforms/cuda/src/CudaContext.cpp	2021-04-15 21:49:43.986792670 +0200
+@@ -227,6 +227,8 @@
+             minor = 3;
+         }
+     }
++    major = 7;
++    minor = 0;
+     gpuArchitecture = intToString(major)+intToString(minor);
+     computeCapability = major+0.1*minor;
+ 
