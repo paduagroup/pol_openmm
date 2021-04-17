@@ -88,6 +88,11 @@ The Jean Zay machine has V100 cards, so the recipe for the PSMN may well work th
         gpuArchitecture = intToString(major)+intToString(minor);
         computeCapability = major+0.1*minor;
 
+    Alternatively, you can apply the patch I created,
+
+        cd ~/src
+        patch -p0 < openmm-sm_70.patch
+
 5. Compile and install,
 
         make -j 12
