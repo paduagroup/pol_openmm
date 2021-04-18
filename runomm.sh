@@ -9,7 +9,8 @@
 
 echo $PATH
 
-export LD_LIBRARY_PATH=$HOME/openmm/lib
+module load cuda/9.2
+export LD_LIBRARY_PATH=$HOME/openmm/lib:$LD_LIBRARY_PATH
 
 cd $SGE_O_WORKDIR
 
