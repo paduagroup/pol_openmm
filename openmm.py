@@ -73,32 +73,38 @@ sim.reporters.append(app.StateDataReporter(sys.stdout, 1000, step=True,
     speed=True, temperature=True, separator='\t',
     totalEnergy=True, potentialEnergy=True, density=True))
 sim.reporters.append(app.PDBReporter('traj.pdb', 10000))
+sim.reporters.append(app.DCDReporter('traj.dcd', 10000))
 
 kB = 1.38064e-23
 NA = 6.022e23
 
 iat = [ i for i, atom in enumerate(modeller.topology.atoms()) if atom.name[0] != 'D' ]
 
-natom = modeller.topology.getNumAtoms()
-mass = np.array([ system.getParticleMass(i)/unit.dalton for i in range(natom) ])
-# add Drude masses back to cores
-for i in range(natom):
-    if mass[i] > 1.1:
-            mass[i] += 0.4
+nall = modeller.topology.getNumAtoms()
+mall = np.array([ system.getParticleMass(i)/unit.dalton for i in range(nall) ])
 
-m = mass.take(iat)
-n = len(m)
-m = m.reshape((n, 1))
-print('#', n, 'atoms', natom - n, 'DP')
+# add Drude masses back to cores
+mat = np.copy(mall)
+for i in range(nall):
+    if mat[i] > 1.1:
+            mat[i] += 0.4
+mat = mat.take(iat)
+nat = len(iat)
+mat = mat.reshape((nat, 1))
+mall = mall.reshape((nall, 1))
+
+print('#', nat, 'atoms', nall - nat, 'DP')
 print('# running...')
 
 for i in range(100):
     sim.step(10000)
     state = sim.context.getState(getVelocities=True)
     vel = state.getVelocities(asNumpy=True)/(unit.nanometer/unit.picosecond)
-    v = vel.take(iat, axis=0)
-    T = np.sum(m*v**2)/(3*n*kB)*(1e3/NA)*unit.kelvin
-    print('# T atoms', T)
+    Tall = np.sum(mall*vel**2)/(3*nall*kB)*(1e3/NA)*unit.kelvin
+    vat = vel.take(iat, axis=0)
+    Tat = np.sum(mat*vat**2)/(3*nat*kB)*(1e3/NA)*unit.kelvin
+    print('# Tall', Tall, 'Tatoms', Tat)
 
+app.PDBFile.writeFile(sim.topology, coords, open('last.pdb', 'w'))
 print()
 print('#', datetime.datetime.now())
