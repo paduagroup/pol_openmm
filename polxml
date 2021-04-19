@@ -242,7 +242,8 @@ class Forcefield(object):
         for atom in atomtypes:
             atname = atom.get('name')
             tok = atname.split('-')
-            if atname[0] == 'D' and len(tok) > 3 :
+            # avoid recursion if mol name same as atom type (ex Cl)
+            if atname[0] == 'D' and len(tok) > 3:
                 continue
             ffname = tok[1]
             for dt in drude.types:
@@ -269,7 +270,8 @@ class Forcefield(object):
                     atname = atom.get('name')
                     attype = atom.get('type')
                     tok = attype.split('-')
-                    if attype[0] == 'D' and len(tok) > 3 :
+                    # avoid recursion if mol name same as atom type (ex Cl)
+                    if attype[0] == 'D' and len(tok) > 3:
                         continue
                     fftype = tok[1]
                     for dt in drude.types:
