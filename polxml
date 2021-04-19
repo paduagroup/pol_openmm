@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # polxml.py - add Drude oscillators to OpenMM xml force field file.
 # Agilio Padua <agilio.padua@ens-lyon.fr>
-# version 2021/04/15
+# version 2021/04/19
 
 
 import argparse
@@ -99,7 +99,7 @@ class PDB(object):
                 if atname[0] == 'D':
                     dp = {'name': atname,
                           'core': atname[1:],
-                          'mol': res.get('name')[:3]}
+                          'mol': res.get('name').strip('-')[:3]}
                     dplist.append(dp)
 
         # add drude particles after each core
