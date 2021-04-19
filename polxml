@@ -94,12 +94,13 @@ class PDB(object):
         dplist = []
         residues = ff.root.find('Residues')
         for res in residues:
+            resname = res.get('name').replace('-', '').replace('+', '')[:3]
             for ffatom in res.iter('Atom'):
                 atname = ffatom.get('name')
                 if atname[0] == 'D':
                     dp = {'name': atname,
                           'core': atname[1:],
-                          'mol': res.get('name').strip('-')[:3]}
+                          'mol': resname}
                     dplist.append(dp)
 
         # add drude particles after each core
