@@ -241,7 +241,10 @@ class Forcefield(object):
         atomtypes = self.root.find('AtomTypes')
         for atom in atomtypes:
             atname = atom.get('name')
-            ffname = atname.split('-')[1]
+            tok = atname.split('-')
+            if atname[0] == 'D' and len(tok) > 3 :
+                continue
+            ffname = tok[1]
             for dt in drude.types:
                 if ffname == dt['type']:
                     # add DP to AtomTypes
@@ -265,7 +268,10 @@ class Forcefield(object):
                 if atom.tag == 'Atom':
                     atname = atom.get('name')
                     attype = atom.get('type')
-                    fftype = attype.split('-')[1]
+                    tok = attype.split('-')
+                    if atname[0] == 'D' and len(tok) > 3 :
+                        continue
+                    fftype = tok[1]
                     for dt in drude.types:
                         if fftype == dt['type']:
                             dcq = float(atom.get('charge'))
@@ -302,7 +308,10 @@ class Forcefield(object):
         atomtypes = self.root.find('AtomTypes')
         for atom in atomtypes:
             atname = atom.get('name')
-            ffname = atname.split('-')[1]
+            tok = atname.split('-')
+            if atname[0] == 'D' and len(tok) > 3 :
+                continue
+            ffname = tok[1]            
             for dt in drude.types:
                 if ffname == dt['type']:
                     dp = ET.SubElement(drudeforce, 'Particle')
