@@ -269,7 +269,7 @@ class Forcefield(object):
                     atname = atom.get('name')
                     attype = atom.get('type')
                     tok = attype.split('-')
-                    if atname[0] == 'D' and len(tok) > 3 :
+                    if attype[0] == 'D' and len(tok) > 3 :
                         continue
                     fftype = tok[1]
                     for dt in drude.types:
