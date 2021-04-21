@@ -55,6 +55,8 @@ properties = {'Precision': 'mixed'}
 sim = app.Simulation(modeller.topology, system, integrator, platform, properties)
 sim.context.setPositions(modeller.positions)
 sim.context.setVelocitiesToTemperature(300*unit.kelvin)
+# read coords and velocities from checkpoint (replaces 2 previous lines)
+#sim.loadCheckpoint('equil.chk')
 
 platform = sim.context.getPlatform()
 print('# platform', platform.getName())
@@ -74,6 +76,7 @@ sim.reporters.append(app.StateDataReporter(sys.stdout, 1000, step=True,
     totalEnergy=True, potentialEnergy=True, density=True))
 sim.reporters.append(app.PDBReporter('traj.pdb', 10000))
 sim.reporters.append(app.DCDReporter('traj.dcd', 10000))
+sim.reporters.append(app.CheckpointReporter('equil.chk', 200000))
 
 kB = 1.38064e-23
 NA = 6.022e23
@@ -109,5 +112,8 @@ state = sim.context.getState(getPositions=True)
 coords = state.getPositions()
 sim.topology.setPeriodicBoxVectors(state.getPeriodicBoxVectors())
 app.PDBFile.writeFile(sim.topology, coords, open('last.pdb', 'w'))
+
+
+
 print()
 print('#', datetime.datetime.now())
