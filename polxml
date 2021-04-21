@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # polxml.py - add Drude oscillators to OpenMM xml force field file.
 # Agilio Padua <agilio.padua@ens-lyon.fr>
-# version 2021/04/15
+# version 2021/04/19
 
 
 import argparse
@@ -94,12 +94,13 @@ class PDB(object):
         dplist = []
         residues = ff.root.find('Residues')
         for res in residues:
+            resname = res.get('name').replace('-', '').replace('+', '')[:3]
             for ffatom in res.iter('Atom'):
                 atname = ffatom.get('name')
                 if atname[0] == 'D':
                     dp = {'name': atname,
                           'core': atname[1:],
-                          'mol': res.get('name')[:3]}
+                          'mol': resname}
                     dplist.append(dp)
 
         # add drude particles after each core
@@ -242,7 +243,8 @@ class Forcefield(object):
         for atom in atomtypes:
             atname = atom.get('name')
             tok = atname.split('-')
-            if atname[0] == 'D' and len(tok) > 3 :
+            # avoid recursion if mol name same as atom type (ex Cl)
+            if atname[0] == 'D' and len(tok) > 3:
                 continue
             ffname = tok[1]
             for dt in drude.types:
@@ -269,7 +271,8 @@ class Forcefield(object):
                     atname = atom.get('name')
                     attype = atom.get('type')
                     tok = attype.split('-')
-                    if attype[0] == 'D' and len(tok) > 3 :
+                    # avoid recursion if mol name same as atom type (ex Cl)
+                    if attype[0] == 'D' and len(tok) > 3:
                         continue
                     fftype = tok[1]
                     for dt in drude.types:
