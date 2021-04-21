@@ -112,8 +112,5 @@ state = sim.context.getState(getPositions=True)
 coords = state.getPositions()
 sim.topology.setPeriodicBoxVectors(state.getPeriodicBoxVectors())
 app.PDBFile.writeFile(sim.topology, coords, open('last.pdb', 'w'))
-
-
-
 print()
 print('#', datetime.datetime.now())
