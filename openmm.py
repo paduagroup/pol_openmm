@@ -105,7 +105,9 @@ for i in range(100):
     Tat = np.sum(mat*vat**2)/(3*nat*kB)*(1e3/NA)*unit.kelvin
     print('# Tall', Tall, 'Tatoms', Tat)
 
-coords = sim.context.getState(getPositions=True).getPositions()
+state = sim.context.getState(getPositions=True)
+coords = state.getPositions()
+sim.topology.setPeriodicBoxVectors(state.getPeriodicBoxVectors())
 app.PDBFile.writeFile(sim.topology, coords, open('last.pdb', 'w'))
 print()
 print('#', datetime.datetime.now())
