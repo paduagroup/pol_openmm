@@ -87,8 +87,8 @@ sim.reporters.append(app.PDBReporter('traj.pdb', 10000))
 sim.reporters.append(app.DCDReporter('traj.dcd', 10000))
 sim.reporters.append(app.CheckpointReporter('equil.chk', 200000))
 
-kB = 1.38064e-23
-NA = 6.022e23
+kB = unit.BOLTZMANN_CONSTANT_kB
+NA = unit.AVOGADRO_CONSTANT_NA
 
 iat = [ i for i, atom in enumerate(modeller.topology.atoms()) if atom.name[0] != 'D' ]
 
