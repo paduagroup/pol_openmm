@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #$ -S /bin/bash
-#$ -N omm
+#$ -N romm
 #$ -q r730gpuRTX2080ti
 #$ -cwd
 #$ -V
@@ -33,7 +33,7 @@ ls -l
 
 #export OPENMM_CPU_THREADS=16
 
-python openmm.py > openmm.out
+python omm.py > openmm.out
 #python testomm.py > test.out
 
 cp -rpf $SCRATCHDIR/* $SGE_O_WORKDIR/
