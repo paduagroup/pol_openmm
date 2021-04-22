@@ -55,8 +55,17 @@ properties = {'Precision': 'mixed'}
 sim = app.Simulation(modeller.topology, system, integrator, platform, properties)
 sim.context.setPositions(modeller.positions)
 sim.context.setVelocitiesToTemperature(300*unit.kelvin)
-# read coords and velocities from checkpoint (replaces 2 previous lines)
-#sim.loadCheckpoint('equil.chk')
+
+## read coords and velocities from checkpoint (replaces sim.context.setPositions and setVelocitiesToTemperature)
+## only the same machine
+# print('# coordinates and velocities from equil.chk')
+# sim.loadCheckpoint('equil.chk')
+
+## read coords and velocities from restart file (replaces sim.context.setPositions and setVelocitiesToTemperature)
+## any machine
+# print('# coordinates and velocities from equil.rst')
+# with open('equil.rst', 'r') as f:
+#    sim.context.setState(openmm.XmlSerializer.deserialize(f.read()))
 
 platform = sim.context.getPlatform()
 print('# platform', platform.getName())
@@ -121,9 +130,14 @@ for i in range(100):
     Tdr = np.sum(mu*vdr**2)/(3*ndr*kB)*(1e3/NA)*unit.kelvin
     print('# Tall', Tall, 'Tatoms', Tat, 'Tdrude', Tdr)
 
-state = sim.context.getState(getPositions=True)
+state = sim.context.getState(getPositions=True, getVelocities=True)
 coords = state.getPositions()
 sim.topology.setPeriodicBoxVectors(state.getPeriodicBoxVectors())
 app.PDBFile.writeFile(sim.topology, coords, open('last.pdb', 'w'))
+
+# write restart file at the end of the run
+with open('equil.rst', 'w') as f:
+    f.write(openmm.XmlSerializer.serialize(state))
+
 print()
 print('#', datetime.datetime.now())
