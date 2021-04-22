@@ -78,25 +78,34 @@ sim.reporters.append(app.PDBReporter('traj.pdb', 10000))
 sim.reporters.append(app.DCDReporter('traj.dcd', 10000))
 sim.reporters.append(app.CheckpointReporter('equil.chk', 200000))
 
-kB = unit.BOLTZMANN_CONSTANT_kB
-NA = unit.AVOGADRO_CONSTANT_NA
+kB = unit.BOLTZMANN_CONSTANT_kB/(unit.joule/unit.kelvin)
+NA = unit.AVOGADRO_CONSTANT_NA*unit.mole
 
 iat = [ i for i, atom in enumerate(modeller.topology.atoms()) if atom.name[0] != 'D' ]
+idr = [ i for i, atom in enumerate(modeller.topology.atoms()) if atom.name[0] == 'D' ]
+nat = len(iat)
+ndr = len(idr)
 
 nall = modeller.topology.getNumAtoms()
 mall = np.array([ system.getParticleMass(i)/unit.dalton for i in range(nall) ])
 
+# reduced mass of DC-DP pairs
+mu = np.zeros(nall)
+for i in idr:
+    mu[i] = 1.0/(1.0/mall[i-1] + 1.0/mall[i])
+mu = mu.reshape((nall, 1))
+vdr = np.zeros((nall, 3))
+
 # add Drude masses back to cores
 mat = np.copy(mall)
-for i in range(nall):
-    if mat[i] > 1.1:
-            mat[i] += 0.4
+for i in idr:
+    mat[i-1] += 0.4
 mat = mat.take(iat)
-nat = len(iat)
 mat = mat.reshape((nat, 1))
+
 mall = mall.reshape((nall, 1))
 
-print('#', nat, 'atoms', nall - nat, 'DP')
+print('#', nat, 'atoms', ndr, 'DP')
 print('# running...')
 
 for i in range(100):
@@ -106,7 +115,11 @@ for i in range(100):
     Tall = np.sum(mall*vel**2)/(3*nall*kB)*(1e3/NA)*unit.kelvin
     vat = vel.take(iat, axis=0)
     Tat = np.sum(mat*vat**2)/(3*nat*kB)*(1e3/NA)*unit.kelvin
-    print('# Tall', Tall, 'Tatoms', Tat)
+
+    for i in idr:
+        vdr[i] = vel[i] - vel[i-1]
+    Tdr = np.sum(mu*vdr**2)/(3*ndr*kB)*(1e3/NA)*unit.kelvin
+    print('# Tall', Tall, 'Tatoms', Tat, 'Tdrude', Tdr)
 
 state = sim.context.getState(getPositions=True)
 coords = state.getPositions()

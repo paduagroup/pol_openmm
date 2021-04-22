@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #$ -S /bin/bash
-#$ -N omm
+#$ -N romm
 #$ -q r730gpuRTX2080ti
 #$ -cwd
 #$ -V
