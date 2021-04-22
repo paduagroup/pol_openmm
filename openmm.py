@@ -117,13 +117,12 @@ for i in range(100):
     Tat = np.sum(mat*vat**2)/(3*nat*kB)*(1e3/NA)*unit.kelvin
     print('# Tall', Tall, 'Tatoms', Tat)
 
-state = sim.context.getState(getPositions=True)
+state = sim.context.getState(getPositions=True, getVelocities=True)
 coords = state.getPositions()
 sim.topology.setPeriodicBoxVectors(state.getPeriodicBoxVectors())
 app.PDBFile.writeFile(sim.topology, coords, open('last.pdb', 'w'))
 
 # write restart file at the end of the run
-state = sim.context.getState(getPositions=True, getVelocities=True)
 with open('equil.rst', 'w') as f:
     f.write(openmm.XmlSerializer.serialize(state))
 
