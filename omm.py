@@ -11,6 +11,9 @@ from simtk.openmm import app
 field = 'field-p-sc.xml'
 config = 'config-p.pdb'
 
+temperature = 353.0*unit.kelvin
+pressure = 1.0*unit.bar
+
 print('#', datetime.datetime.now())
 print()
 
@@ -35,17 +38,17 @@ system = forcefield.createSystem(modeller.topology, nonbondedMethod=app.PME,
     nonbondedCutoff=12.0*unit.angstrom, constraints=app.HBonds,
     ewaldErrorTolerance=1.0e-5)
 
-#print('# Drude Nose-Hoover integrator')
-#integrator = openmm.DrudeNoseHooverIntegrator(300*unit.kelvin, 5/unit.picosecond,
+#print('# Drude Nose-Hoover integrator', temperature)
+#integrator = openmm.DrudeNoseHooverIntegrator(temperature, 5/unit.picosecond,
 #    1*unit.kelvin, 20/unit.picosecond, 1*unit.femtosecond)
-print('# Drude Langevin integrator')
-integrator = openmm.DrudeLangevinIntegrator(300*unit.kelvin, 5/unit.picosecond,
+print('# Drude Langevin integrator', temperature)
+integrator = openmm.DrudeLangevinIntegrator(temperature, 5/unit.picosecond,
     1*unit.kelvin, 20/unit.picosecond, 1*unit.femtosecond)
 integrator.setMaxDrudeDistance(0.2*unit.angstrom)
 print('#   max Drude distance', integrator.getMaxDrudeDistance())
 
-print('#   barostat')
-barostat = openmm.MonteCarloBarostat(1*unit.bar, 300*unit.kelvin)
+print('#   barostat', pressure)
+barostat = openmm.MonteCarloBarostat(pressure, temperature)
 system.addForce(barostat)
 
 platform = openmm.Platform.getPlatformByName('CUDA')
@@ -54,7 +57,7 @@ properties = {'Precision': 'mixed'}
 
 sim = app.Simulation(modeller.topology, system, integrator, platform, properties)
 sim.context.setPositions(modeller.positions)
-sim.context.setVelocitiesToTemperature(300*unit.kelvin)
+sim.context.setVelocitiesToTemperature(temperature)
 
 ## read coords and velocities from checkpoint (replaces sim.context.setPositions and setVelocitiesToTemperature)
 ## only the same machine
@@ -92,13 +95,13 @@ NA = unit.AVOGADRO_CONSTANT_NA*unit.mole
 
 iat = [ i for i, atom in enumerate(modeller.topology.atoms()) if atom.name[0] != 'D' ]
 idr = [ i for i, atom in enumerate(modeller.topology.atoms()) if atom.name[0] == 'D' ]
-ih  = [ i for i, atom in enumerate(modeller.topology.atoms()) if atom.name[0] == 'H' ]
 nat = len(iat)
 ndr = len(idr)
-nh  = len(ih)
 
 nall = modeller.topology.getNumAtoms()
 mall = np.array([ system.getParticleMass(i)/unit.dalton for i in range(nall) ])
+
+ncons = system.getNumConstraints()
 
 # reduced mass of DC-DP pairs
 mu = np.zeros(nall)
@@ -116,11 +119,11 @@ mat = mat.reshape((nat, 1))
 
 mall = mall.reshape((nall, 1))
 
-print('#', nat, 'atoms', ndr, 'DP')
+print('#', nat, 'atoms', ndr, 'DP', ncons, 'constraints')
 print('# running...')
 
-dof_all = 3*nall - nh                  # remove X-H constraints
-dof_at = 3*nat - nh                    # remove X-H constraints
+dof_all = 3*nall - ncons
+dof_at = 3*nat - ncons
 dof_dr = 3*ndr
 for i in range(100):
     sim.step(10000)
