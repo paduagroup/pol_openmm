@@ -119,9 +119,9 @@ mall = mall.reshape((nall, 1))
 print('#', nat, 'atoms', ndr, 'DP')
 print('# running...')
 
-dof_all = 3*nall
-dof_at  = 3*nat - nh                   # remove X-H constraints
-dof_dr  = 3*ndr
+dof_all = 3*nall - nh                  # remove X-H constraints
+dof_at = 3*nat - nh                    # remove X-H constraints
+dof_dr = 3*ndr
 for i in range(100):
     sim.step(10000)
     state = sim.context.getState(getVelocities=True)
