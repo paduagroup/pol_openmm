@@ -92,8 +92,10 @@ NA = unit.AVOGADRO_CONSTANT_NA*unit.mole
 
 iat = [ i for i, atom in enumerate(modeller.topology.atoms()) if atom.name[0] != 'D' ]
 idr = [ i for i, atom in enumerate(modeller.topology.atoms()) if atom.name[0] == 'D' ]
+ih  = [ i for i, atom in enumerate(modeller.topology.atoms()) if atom.name[0] == 'H' ]
 nat = len(iat)
 ndr = len(idr)
+nh  = len(ih)
 
 nall = modeller.topology.getNumAtoms()
 mall = np.array([ system.getParticleMass(i)/unit.dalton for i in range(nall) ])
@@ -117,17 +119,20 @@ mall = mall.reshape((nall, 1))
 print('#', nat, 'atoms', ndr, 'DP')
 print('# running...')
 
+dof_all = 3*nall
+dof_at  = 3*nat - nh                   # remove X-H constraints
+dof_dr  = 3*ndr
 for i in range(100):
     sim.step(10000)
     state = sim.context.getState(getVelocities=True)
     vel = state.getVelocities(asNumpy=True)/(unit.nanometer/unit.picosecond)
-    Tall = np.sum(mall*vel**2)/(3*nall*kB)*(1e3/NA)*unit.kelvin
+    Tall = np.sum(mall*vel**2)/(dof_all*kB)*(1e3/NA)*unit.kelvin
     vat = vel.take(iat, axis=0)
-    Tat = np.sum(mat*vat**2)/(3*nat*kB)*(1e3/NA)*unit.kelvin
+    Tat = np.sum(mat*vat**2)/(dof_at*kB)*(1e3/NA)*unit.kelvin
 
     for i in idr:
         vdr[i] = vel[i] - vel[i-1]
-    Tdr = np.sum(mu*vdr**2)/(3*ndr*kB)*(1e3/NA)*unit.kelvin
+    Tdr = np.sum(mu*vdr**2)/(dof_dr*kB)*(1e3/NA)*unit.kelvin
     print('# Tall', Tall, 'Tatoms', Tat, 'Tdrude', Tdr)
 
 state = sim.context.getState(getPositions=True, getVelocities=True)
