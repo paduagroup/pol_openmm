@@ -186,7 +186,7 @@ class Drude(object):
                 if len(ffatoms) > 0:
                     for att in config.atoms:
                         if att['name'] == ffatoms[0].attrib['name'] and ffatoms[0].attrib['type'].split('-')[0] == att['mol']:
-                            print(att['name'],ffatoms[0].attrib['name'],ffatoms[0].attrib['type'],drude['type'],att['nH'], att['mol'])
+                            # print(att['name'],ffatoms[0].attrib['name'],ffatoms[0].attrib['type'],drude['type'],att['nH'], att['mol'])
                             alpha += att['nH'] * self.alpha_H
                             break
                 
