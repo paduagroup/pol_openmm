@@ -204,7 +204,8 @@ class Drude(object):
                     
                     alpha += att['nH'] * self.alpha_H
                     if len(list(set((nH)))) > 1 :
-                        print('warning: {0} non-bonded type has different number of hydrogens attached {1} in {2}; value of {3:.3f} assigned '.format(drude['type'],nH,[x.attrib['type'] for x in ffatoms], alpha))
+                        #print('warning: {0} non-bonded type has different number of hydrogens attached {1} in {2}; value of {3:.3f} assigned '.format(drude['type'],nH,[x.attrib['type'] for x in ffatoms], alpha))
+                        raise RuntimeError('{0} non-bonded type should have the same number of hydorgent attached: {1} hydrogens in {2}'.format(drude['type'],nH,[x.attrib['type'] for x in ffatoms]))
 
                 drude['alpha'] = alpha
 
