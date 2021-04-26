@@ -183,13 +183,29 @@ class Drude(object):
                 for r in ffres:
                     ffatoms.extend([x for x in r.findall('Atom') if drude['type'] == x.get('type').split('-')[1]])
 
-                if len(ffatoms) > 0:
-                    for att in config.atoms:
-                        if att['name'] == ffatoms[0].attrib['name'] and ffatoms[0].attrib['type'].split('-')[0] == att['mol']:
-                            # print(att['name'],ffatoms[0].attrib['name'],ffatoms[0].attrib['type'],drude['type'],att['nH'], att['mol'])
-                            alpha += att['nH'] * self.alpha_H
-                            break
                 
+                ## takes the first maching atom type from field-p.xml
+                # if len(ffatoms) > 0:
+                #     for att in config.atoms:
+                #         if att['name'] == ffatoms[0].attrib['name'] and ffatoms[0].attrib['type'].split('-')[0] == att['mol']:
+                #             alpha += att['nH'] * self.alpha_H
+                #             break
+                
+                
+                ## checks all maching atoms types from field-p.xml
+                ## checks number of H attached to same non-bonded type 
+                if len(ffatoms) > 0:
+                    nH = []
+                    for a in ffatoms:
+                        for att in config.atoms:
+                            if att['name'] == a.attrib['name'] and a.attrib['type'].split('-')[0] == att['mol']:
+                                nH.append(att['nH'])
+                                break
+                    
+                    alpha += att['nH'] * self.alpha_H
+                    if len(list(set((nH)))) > 1 :
+                        print('warning: {0} non-bonded type has different number of hydrogens attached {1} in {2}; value of {3:.3f} assigned '.format(drude['type'],nH,[x.attrib['type'] for x in ffatoms], alpha))
+
                 drude['alpha'] = alpha
 
                 dq = (fpe0 * drude['k'] * alpha)**0.5
