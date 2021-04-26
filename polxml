@@ -140,7 +140,7 @@ fpe0 =  0.000719756                     # (4 Pi eps0) in e^2/(kJ/mol A)
 class Drude(object):
     """specification of drude oscillator types"""
 
-    def __init__(self, drudefile, config):
+    def __init__(self, drudefile, config, ff):
         self.types = []
         self.alpha_H = 0.323           # PCCP 20(2018)10992
 
@@ -177,11 +177,19 @@ class Drude(object):
                 drude['k'] = float(tok[3])
                 alpha = float(tok[4])
                 drude['thole'] = float(tok[5])
+                
+                ffres = ff.root.find('Residues').findall('Residue')
+                ffatoms = []
+                for r in ffres:
+                    ffatoms.extend([x for x in r.findall('Atom') if drude['type'] == x.get('type').split('-')[1]])
 
-                for att in config.atoms:
-                    if drude['type'] in att['name']:
-                        alpha += att['nH'] * self.alpha_H
-                        break
+                if len(ffatoms) > 0:
+                    for att in config.atoms:
+                        if att['name'] == ffatoms[0].attrib['name'] and ffatoms[0].attrib['type'].split('-')[0] == att['mol']:
+                            print(att['name'],ffatoms[0].attrib['name'],ffatoms[0].attrib['type'],drude['type'],att['nH'], att['mol'])
+                            alpha += att['nH'] * self.alpha_H
+                            break
+                
                 drude['alpha'] = alpha
 
                 dq = (fpe0 * drude['k'] * alpha)**0.5
@@ -353,7 +361,7 @@ def main():
 
     config = PDB(args.inpdb)
     ff = Forcefield(args.inxml)
-    drude = Drude(args.ffdrude, config)
+    drude = Drude(args.ffdrude, config, ff)
     ff.polarize(drude)
     ff.write(args.outxml)
     config.polarize(ff, args.eps)
