@@ -225,7 +225,7 @@ class Drude(object):
                 drude['k'] = float(tok[3])
                 alpha = float(tok[4])
                 drude['thole'] = float(tok[5])
-
+                
                 for att in config.atoms:
                     if drude['type'] == att['type']:
                         alpha += att['nH'] * self.alpha_H
