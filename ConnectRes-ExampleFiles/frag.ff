@@ -1,0 +1,46 @@
+# Zif-8 ff from J. Phys. Chem. C 2012, 116, 933-938
+# DOI 10.1021.jp209463a
+# Imidazole ff with params from:
+#	J. Phys. Chem. B 1998, 102, 8049-8059 DOI:10.1021/jp981200o
+#	Dihedrals from AMBER-FF
+#
+# units: kJ/mol, A, deg
+# bond and angle force constants are in the form k/2 (x - x0)^2
+# use 'cons' to indicate constrained bonds and angles
+# in improper dihedrals the central atom is the third in the list
+#
+# use with fftool to build input files for LAMMPS (or DLPOLY, GROMACS)
+
+ATOMS
+#     typ  m/u     q/e    pot   pars
+# ZIF-8
+# Zn     Zn  65.4     +0.7362 lj    1.96   0.0523
+
+BONDS
+# i j    pot    re/A    kr/kJmol-1
+Zn   NZ    harm   2.011   656.9
+
+ANGLES
+# i j   k    pot    th/deg  ka/kjmol-1
+CX   NZ   Zn    harm   128.33  407.4
+CY   NZ   Zn    harm   126.40  271.8
+NZ   Zn   NZ    harm   109.48  294.9
+
+DIHEDRALS
+# i j   k   l    pot    v1        v2        v3        v4
+# ZIF-8
+Zn   NZ   CY   CY    opls   0.0000    19.456    0.0000    0.0000
+Zn   NZ   CX   NZ    opls   0.0000    41.840    0.0000    0.0000
+CZ   CX   NZ   Zn    opls   0.0000    41.840    0.0000    0.0000
+Zn   NZ   CY   HY    opls   0.0000    19.456    0.0000    0.0000
+# Terminating nitrogen
+Zn   NZ   CX   NY    opls   0.0000    41.840    0.0000    0.0000
+
+IMPROPER
+# Given in paper as E_imp = K (phi-phi_0)^2 
+# Comparing these to JACS 117 (1995) 5179 show that these number should go in second column?
+# Gives a minimum of 180 deg but a different shape well.
+CY   Zn   NZ   CX    opls   0.0000    8.3680    0.0000    0.0000
+
+
+
