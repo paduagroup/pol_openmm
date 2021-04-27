@@ -36,6 +36,8 @@ class Topology(object):
     '''topology and coordinates from pdb file'''
 
     def __init__(self, pdbfile):
+        '''read from pdb file'''
+
         self.box = ''
         self.atoms = []
         self.bonds = []
@@ -60,6 +62,7 @@ class Topology(object):
                 atom['ele'] = line[76:78].strip()
                 atom['nH'] = 0         # number of bonded H
                 atom['type'] = ''      # non-bonded type
+                atom['class'] = ''     # bonded type
                 self.atoms.append(atom)
                 line = f.readline()
             while 'CONECT' in line:
@@ -72,7 +75,7 @@ class Topology(object):
                 line = f.readline()
 
     def write(self, pdbfile):
-        '''write PDB file'''
+        '''write topology to PDB file'''
 
         with open(pdbfile, 'w') as f:
             f.write('TITLE     created by polxml\n')
@@ -89,6 +92,23 @@ class Topology(object):
                 f.write('CONECT{0:5d}{1:5d}\n'.format(bd['i']+1, bd['j']+1))
             f.write('END\n')
 
+    def settypes(self, ff):
+        '''assign types from ff to atoms in topology'''
+
+        for at in self.atoms:
+            for res in ff.root.iter('Residue'):
+                resname = res.get('name').replace('-', '').replace('+', '')[:3]
+                if at['mol'] == resname:
+                    for ffatom in res.iter('Atom'):
+                        if at['name'] == ffatom.get('name'):
+                            at['type'] = ffatom.get('type').split('-')[1]
+                            for attype in ff.root.iter('Type'):
+                                if at['type'] == attype.get('name').split('-')[1]:
+                                    at['class'] = attype.get('class')
+                                    break
+                            break
+                    break
+
     def countbondedH(self):
         '''count H bonded to each atom (to merge polarizabilities)'''
 
@@ -100,28 +120,23 @@ class Topology(object):
             elif self.atoms[j]['name'][0] in 'Hh':
                 self.atoms[i]['nH'] += 1
 
-    def setnbtypes(self, ff):
-        '''assign non-bonded types from ff to config atoms'''
+    def checknH(self):
+        '''check if each non-bonded type has same number of bonded H'''
 
-        natoms = len(self.atoms)
-        i = 0
-        at = self.atoms[i]
-        for res in ff.root.iter('Residue'):
-            resname = res.get('name').replace('-', '').replace('+', '')[:3]
-            while at['mol'] == resname:
-                for ffatom in res.iter('Atom'):
-                    if at['name'] != ffatom.get('name'):
-                        raise RuntimeError('inconsistent atom name {0}'\
-                            .format(i))
-                    at['type'] = ffatom.get('type').split('-')[1]
-                    i += 1
-                    if i == natoms:
-                        return
-                    at = self.atoms[i]
-
+        attype = [at['type'] for at in self.atoms]
+        atnh = [at['nH'] for at in self.atoms]
+        types = list(set(attype))
+        nh = [-1] * len(types)
+        for at, n in zip(attype, atnh):
+            i = types.index(at)
+            if nh[i] == -1:
+                nh[i] = n
+            elif nh[i] != n:
+                raise RuntimeError('atom type {0} with different numbers of '\
+                    'bonded H'.format(at))
 
     def polarize(self, ff, eps=0.05):
-        '''add Drude particles and bonds to PDB'''
+        '''add Drude particles and bonds to topology'''
 
         dplist = []
         for res in ff.root.iter('Residue'):
@@ -189,7 +204,8 @@ class Drude(object):
             f.seek(0)
 
             config.countbondedH()
-            config.setnbtypes(ff)
+            config.settypes(ff)
+            config.checknH()
 
             for line in f:
                 line = line.strip()
@@ -283,8 +299,7 @@ class Forcefield(object):
                     # atom.set('mass', '{0:.4f}'.format(dcm))
                     break
 
-        residues = self.root.find('Residues')
-        for residue in residues:
+        for residue in self.root.iter('Residue'):
             i = 0
             for atom in residue:
                 i += 1
@@ -329,8 +344,7 @@ class Forcefield(object):
         dp.set('epsilon', '0.0')
 
         drudeforce = ET.SubElement(self.root, 'DrudeForce')
-        atomtypes = self.root.find('AtomTypes')
-        for atom in atomtypes:
+        for atom in self.root.iter('Type'):
             atname = atom.get('name')
             tok = atname.split('-')
             if atname[0] == 'D' and len(tok) > 3 :
@@ -377,8 +391,11 @@ def main():
     drude = Drude(args.ffdrude, config, ff)
     ff.polarize(drude)
     ff.write(args.outxml)
+    print('polarizable force field written to', args.outxml)
+    print('adding Drude particles to configuration...')
     config.polarize(ff, args.eps)
     config.write(args.outpdb)
+    print('configuration written to', args.outpdb)
 
 if __name__ == '__main__':
     main()
