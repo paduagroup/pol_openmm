@@ -110,6 +110,39 @@ class FieldXML(object):
 
     def Scale(self, ff, syst, sapt, scsig):
         try:
+            ## i-i interactions           
+            atom_lj = self.root.find('LennardJonesForce').findall('Atom')
+            for ii_pair in atom_lj:
+                if ii_pair.get('class') is not None:
+                    continue
+
+                i = ii_pair.get('type').split('-')[1]
+                eps = float(ii_pair.get('epsilon'))
+                sig = float(ii_pair.get('sigma'))
+            
+                for frp in syst.fragmentpairs:
+                    if not sapt:
+                        k = frp.k_pred
+                    elif frp.k_sapt is not None:
+                        k = frp.k_sapt
+                    else:
+                        raise Exception('  error: k_sapt for {0} {1} dimer not found in {2}'.format(frp.fr1.name, frp.fr2.name, ff.filename))                   
+                    if (i in frp.fr1.ind_range and i in frp.fr2.ind_range) and k < 1:
+                        eps *= k
+                        break
+            
+                if (scsig is not None):
+                    fi = next((x for x in syst.fragments if (i in x.ind_range)), None)
+
+                    if (fi is not None):
+                        if fi.scale_sig:
+                            sig *= _Const.sigma_k
+
+                ii_pair.set('epsilon', '{0:.8f}'.format(eps))
+                ii_pair.set('sigma', '{0:.8f}'.format(sig))
+
+
+            ## i-j interactions
             nb_fix_pair = self.root.find('LennardJonesForce').findall('NBFixPair')
 
             if 'type1' not in nb_fix_pair[0].attrib and 'type2' not in nb_fix_pair[0].attrib:
@@ -142,9 +175,6 @@ class FieldXML(object):
 
                 ij_pair.set('epsilon', '{0:.8f}'.format(eps))
                 ij_pair.set('sigma', '{0:.8f}'.format(sig))
-
-                # for comparison with pair-p-sc.lmp
-                # print('{2:10.6f}   {3:10.6f}  # {0:s} {1:s} '.format(i,j,eps/4.184,sig*10))
 
         except Exception as e:
             print(e)
