@@ -178,22 +178,13 @@ class Drude(object):
                 alpha = float(tok[4])
                 drude['thole'] = float(tok[5])
                 
-                ffres = ff.root.find('Residues').findall('Residue')
                 ffatoms = []
-                for r in ffres:
-                    ffatoms.extend([x for x in r.findall('Atom') if drude['type'] == x.get('type').split('-')[1]])
-
+                for res in ff.root.iter('Residue'):
+                    ffatoms.extend([at for at in res.iter('Atom') if \
+                        drude['type'] == at.get('type').split('-')[1]])
                 
-                ## takes the first maching atom type from field-p.xml
-                # if len(ffatoms) > 0:
-                #     for att in config.atoms:
-                #         if att['name'] == ffatoms[0].attrib['name'] and ffatoms[0].attrib['type'].split('-')[0] == att['mol']:
-                #             alpha += att['nH'] * self.alpha_H
-                #             break
-                
-                
-                ## checks all maching atoms types from field-p.xml
-                ## checks number of H attached to same non-bonded type 
+                # checks all maching atom types from field.xml
+                # checks number of H attached to same non-bonded type 
                 if len(ffatoms) > 0:
                     nH = []
                     for a in ffatoms:
@@ -381,8 +372,11 @@ def main():
     drude = Drude(args.ffdrude, config, ff)
     ff.polarize(drude)
     ff.write(args.outxml)
+    print('polarizable force field written to', args.outxml)
+    print('adding Drude particles to configuration...')
     config.polarize(ff, args.eps)
     config.write(args.outpdb)
+    print('configuration written to', args.outpdb)
 
 if __name__ == '__main__':
     main()
