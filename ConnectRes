@@ -530,7 +530,7 @@ def main():
 		print('ERROR: Must specify fragments in pairs')
 		sys.exit(1)
 	else:
-		nopairs = len(args.fragments)/2
+		nopairs = int(len(args.fragments)/2)
 		print(' {0} pair(s) of atoms.'.format(nopairs))
 		atoms_1 = [None]*nopairs; atoms_2 = [None]*nopairs
 		frags_1 = [None]*nopairs; frags_2 = [None]*nopairs
