@@ -138,7 +138,7 @@ class PdbFile(object):
 				distance = dist2at(atom_1, atom_2, self.boxDimensions)
 				if distance<bond_length+bondtol:
 					no_bonds+=1
-					self.bonds.append({'i': atom_1['index'], 'j': atom_2['index']})
+					self.bonds.append({'i': int(atom_1['index']-1), 'j': int(atom_2['index']-1)})
 					self.newConnections_created.append([atom_1, atom_2])
 	
 	def reportConnections(self):
