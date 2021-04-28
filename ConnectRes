@@ -4,7 +4,7 @@
 # into an openMM xml force field file.
 # Ryan Clark <ryan.clark@ens-lyon.fr>
 # Agilio Padua <agilio.padua@ens-lyon.fr>
-# version 2021/04/27
+# version 2021/04/28
 
 import numpy as np
 import argparse
