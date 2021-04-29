@@ -3,12 +3,14 @@
 # force field parameters for these bonds, and other parameters
 # into an openMM xml force field file.
 # Ryan Clark <ryan.clark@ens-lyon.fr>
-# version 2021/04/23
+# Agilio Padua <agilio.padua@ens-lyon.fr>
+# version 2021/04/28
 
 import numpy as np
 import argparse
 import sys
 from collections import Counter
+import xml.etree.ElementTree as ET
 from copy import deepcopy
 
 #-------------
@@ -18,730 +20,434 @@ bondtol = 1.0
 def dist2at(at1,at2,boxDim):
 	'''Find shortest distance between 2 atoms given periodic boundary conditions'''
 	boxX = float(boxDim[0]);boxY = float(boxDim[1]);boxZ = float(boxDim[2])
-	x = abs(at1[2]-at2[2])
+	x = abs(at1['x']-at2['x'])
 	while x > boxX/2:
 		x = abs(x-boxX)
-	y = abs(at1[3]-at2[3])
+	y = abs(at1['y']-at2['y'])
 	while y > boxY/2:
 		y = abs(y-boxY)
-	z = abs(at1[4]-at2[4])
+	z = abs(at1['z']-at2['z'])
 	while z > boxZ/2:
-		z = abs(x-boxZ)
+		z = abs(z-boxZ)
 	return np.sqrt(x**2+y**2+z**2)
+
+
+
+#-----------------------
 
 class PdbFile(object):
 	'''Class object for pdb structure file for openMM'''
 	def __init__(self, datafile):
-		'''Read pdb file'''
-		self.header = ""
-		self.no_atoms = self.no_connections = 0
-		d = open(datafile, "r")
-		'''Determines number of atoms and connections'''
-		while True:
-			line = d.readline().strip()
-			if len(line) == 0:
-				continue
-			lineID = line[0:6]
-			if lineID == 'HETATM':
-				self.no_atoms+=1
-			elif lineID == 'CONECT':
-				self.no_connections+=1
-			if line == 'END':
-				break
-		d.seek(0)
-		self.atomtype = [None]*self.no_atoms
-		self.atomindices = [None]*self.no_atoms
-		self.atomidentities = [None]*self.no_atoms
-		self.fragmentnames = [None]*self.no_atoms
-		self.fragmentnumber = [None]*self.no_atoms
-		self.x = [None]*self.no_atoms
-		self.y = [None]*self.no_atoms
-		self.z = [None]*self.no_atoms
-		self.atomlinetail = [None]*self.no_atoms
-		self.connections = [None]*self.no_connections
-		'''Collects atom and connection data'''
-		lineno=0
-		while True:
-			line = d.readline().strip()
-			if len(line) == 0:
-				continue
-			if lineno<3:
-				self.header += line+"\n"
-			elif lineno<self.no_atoms+3:
-				atom_no = lineno-3
-				self.atomtype[atom_no] = str(line[0:6].strip());     
-				self.atomindices[atom_no] = int(line[6:11].strip());    
-				self.atomidentities[atom_no] = str(line[11:16].strip());   
-				self.fragmentnames[atom_no] = str(line[16:20].strip());   
-				self.fragmentnumber[atom_no] = int(line[20:30].strip());   
-				self.x[atom_no] = float(line[30:38].strip()); 
-				self.y[atom_no] = float(line[38:46].strip()); 
-				self.z[atom_no] = float(line[46:55].strip()); 
-				self.atomlinetail[atom_no] = str(line[55:]);           
-			elif lineno<self.no_connections+self.no_atoms+3:
-				connection_no = lineno-(self.no_atoms+3)
-				self.connections[connection_no] = [line[0:6],line[6:11],
-					line[11:16]]
-			lineno+=1
-			if line == 'END':
-				break
-		d.close()	
-		'''create empty list to add connections to in order to work out 
-		how many external bond flags to add to xml file'''	
-		self.newconnections = []
-		'''Pull box dimensions out of header
-		Only supports orthogonal boxes so far'''
-		header_lines = self.header.split('\n')
-		box_line = header_lines[2].split()
+		self.box = ''
+		self.atoms = []
+		self.bonds = []
+		self.newConnections_created = [] # List for atom ids of new connections (needs creating when initialising)
+		with open(datafile, 'r') as f:
+			line = f.readline()
+			while 'CRYST1' not in line:
+				line = f.readline()
+			self.box = line.strip()
+			line = f.readline()
+			while not (line.startswith('ATOM') or line.startswith('HETATM')):
+				line = f.readline()
+			while 'ATOM' in line or 'HETATM' in line:
+				atom = {}
+				atom['index'] = int(line[6:11])
+				atom['name'] = line[12:16].strip()
+				atom['frag'] = line[17:20].strip()
+				atom['seq'] = int(line[22:26])
+				atom['x'] = float(line[30:38])
+				atom['y'] = float(line[38:46])
+				atom['z'] = float(line[46:54])
+				atom['ele'] = line[76:78].strip()
+				self.atoms.append(atom)
+				line = f.readline()
+			while 'CONECT' in line:
+				i = int(line[6:11])  - 1
+				j = int(line[11:16]) - 1
+				if self.atoms[i]['seq'] != self.atoms[j]['seq']:
+					print('WARNING: bond atoms {0:d} and {1:d} not in same molecule'.format(i, j))
+					#sys.exit(1)
+				self.bonds.append({'i': i, 'j': j})
+				line = f.readline()	
+		#Pull box dimensions out of header. Only supports orthogonal boxes so far
+		box_line = self.box.split()
 		if float(box_line[4]) != 90.0 or float(box_line[5]) != 90.0 or float(box_line[5]) != 90.0 :
 			print('ERROR: Non-orthogonal boxes not supported')
 			sys.exit(1)
 		self.boxDimensions = [box_line[1],box_line[2],box_line[3]]
 
-	def buildValidAtomList(self, ForceField):
-		'''Creates list with atom types listed once each and 
-		corresponding fragment types to check for valid atoms'''
-		self.atomidentities_list = []
-		for i in range(self.no_atoms):
-			at_id = self.atomidentities[i]
-			frag_id =  self.fragmentnames[i]
-			atomidentity = '{0},{1}'.format(at_id,frag_id)
-			if atomidentity not in self.atomidentities_list:
-				self.atomidentities_list += [atomidentity]
+	def PrintToFile(self, outfile):
+		'''Print .pdb file of PDB class'''
+		with open(outfile, 'w') as f:
+			f.write('TITLE     created by ConnectRes\n')
+			f.write('REMARK    includes extra ff parameters and external bonds \n')
+			f.write(self.box + '\n')
+			n = 0
+			for at in self.atoms:
+				n += 1
+				f.write('HETATM{0:5d} {1:4s} {2:3s}  {3:4d}    '\
+				'{4:8.3f}{5:8.3f}{6:8.3f}  1.00  0.00          '\
+				'{7:>2s}\n'.format(at['index'], at['name'], at['frag'], at['seq'],
+				at['x'], at['y'], at['z'], at['ele']))
+			for bd in self.bonds:
+				f.write('CONECT{0:5d}{1:5d}\n'.format(bd['i']+1, bd['j']+1))
+			f.write('END\n')
 
-	def checkValidReturnId(self, atom, ForceField):
-		'''Check atoms are valid
-		Atom needs to be supplied as atom class, fragment string'''
-		atom_class = atom.split(',')[0]
-		atom_frag = atom.split(',')[1]
-		atomIDs = []
-		for residue in ForceField.residues:
-			if residue.name == atom_frag:
-				atoms = residue.atoms
-				for i in range(len(atoms)):
-					tok = atoms[i]
-					tok = tok[0].split(',')
-					if tok[1]==atom_class:
-						atomIDs.append(tok[0])
-		print(' Found {0} types of atom {1} in fragment {2}: {3}'.\
-		format(len(atomIDs), atom_class, atom_frag,', '.join(atomIDs)))
-		for atom in atomIDs:
-			atomIDfragID = str('{0},{1}'.format(atom,atom_frag))
-			if atomIDfragID not in self.atomidentities_list:
-				atom_at, atom_frag = a
-				string = 'Error: Atom {0} in fragment {1} not in identity list. System contains:'.format(atom_at,atom_frag)
-				prevFrag=''
-				for i in range(len(self.atomidentities_list)):
-					at,frag = self.atomidentities_list[i].split(',')
-					if frag != prevFrag:
-						string += '\n Fragment: {0} contains Atom IDs: {1}'.format(frag, at)
-						prevFrag = frag
-					else:
-						string += ', {0}'.format(at)
-				print(string)
-				sys.exit(1)
-		return atomIDs
-
-	def addConnection(self, atom1, atom2, ForceField):	
-		print('------------------------------------')
-		print('Connecting atoms IDs {0} and {1}'.format(atom1[0],atom2[0]))
-		self.connections_created = []
-		atom_class_list = [atom1, atom2]
-		atom_1_class = atom1.split(',')[0];atom_1_frag = atom1.split(',')[1];
-		atom_2_class = atom2.split(',')[0];atom_2_frag = atom2.split(',')[1];
-		atom_ID_list = [None]*2
-		for i in range(2):
-			atom = atom_class_list[i]
-			atom_ID_list[i] = self.checkValidReturnId(atom, ForceField)
-		atom_1_IDs = atom_ID_list[0];atom_2_IDs = atom_ID_list[1]
-		print(' Connecting atoms: {0} and {1}'.format(', '.join(atom_ID_list[0]),\
-		', '.join(atom_ID_list[1])))
-		'''Use atom class to pull out expected bond length for the two atoms'''
-		for bond in ForceField.bonds:
-			bond_atom1,bond_atom2 = bond.atom1,bond.atom2
-			if atom_1_class in [bond_atom1,bond_atom2] and atom_2_class in [bond_atom1,bond_atom2]:
-				bond_length = float(bond.length)*10.
+	def AddConnection(self, atom1, atom2, ff):
+		'''Add connection between 2 atoms'''
+		atom1_class = atom1.split(',')[0]; atom1_frag = atom1.split(',')[1]
+		atom2_class = atom2.split(',')[0]; atom2_frag = atom2.split(',')[1]
+		atom1_names = []; atom2_names = [] # List of atom names that will appear in pdb file
+		
+		# Use force field bonds to find bond length for distance search
+		bondtypes = ff.root.find('HarmonicBondForce')
+		for bond in bondtypes:
+			bondat1 = bond.get('class1'); bondat2 = bond.get('class2')
+			if atom1_class in [bondat1,bondat2] and atom2_class in [bondat1,bondat2]:
+				bond_length = float(bond.get('length'))*10.
 		if 'bond_length' not in locals():
 			print('ERROR: No bond between {0} and {1} specified in force field'\
 			.format(atom_1_class,atom_2_class))
 			sys.exit(1)  
-		'''Pull out lists of all atom indices for each atom that needs connecting 
-		for comparison of distances.'''
+		
+		# Populate list of atom names for pdb search
+		residues = ff.root.find('Residues')
+		for residue in residues:
+			res_name = residue.get('name')
+			for ffatom in residue.iter('Atom'):
+				ffatom_type = ffatom.get('type').split('-')[1]
+				ffatom_name = ffatom.get('name')
+				if ffatom_type == atom1_class and res_name == atom1_frag:
+					atom1_names.append('{0}'.format(ffatom_name))
+				if ffatom_type == atom2_class and res_name == atom2_frag:
+					atom2_names.append('{0}'.format(ffatom_name))
+		
+		# Make lists of atoms of the correct type
 		at_1_list = []; at_2_list = []
-		for i in range(self.no_atoms):
-			temp_atomid = self.atomidentities[i]
-			temp_fragname = self.fragmentnames[i]
-			'''If atom and fragment match, pull into list to compare.'''
-			if temp_atomid in atom_1_IDs and temp_fragname == atom_1_frag:
-				at_1_list.append([self.atomindices[i], self.atomidentities[i], self.x[i],\
-				self.y[i], self.z[i]])
-			elif temp_atomid in atom_2_IDs and temp_fragname == atom_2_frag:
-				at_2_list.append([self.atomindices[i], self.atomidentities[i], self.x[i],\
-				self.y[i], self.z[i]])
-		'''Run through PDB file and add connections for all atom1-atom2 pairs
-		that are close together (according to force field)'''
+		for atom in self.atoms:
+			if atom['name'] in atom1_names and atom['frag'] == atom1_frag:
+				at_1_list.append(atom)
+			if atom['name'] in atom2_names and atom['frag'] == atom2_frag:
+				at_2_list.append(atom)
+		
+		# Run through lists of atoms and connect those close enough according to bond length
 		for atom_1 in at_1_list:
 			no_bonds = 0
 			for atom_2 in at_2_list:
 				distance = dist2at(atom_1, atom_2, self.boxDimensions)
 				if distance<bond_length+bondtol:
 					no_bonds+=1
-					self.AddConnectionToList(atom_1,atom_2)
-					self.newconnections.append([atom_1[0],atom_1[1],atom_1_frag])
-					self.newconnections.append([atom_2[0],atom_2[1],atom_2_frag])
-			if no_bonds!=0:
-				self.connections_created.append([no_bonds, atom_1_class, atom_2_class])
-		self.reportConnections()
-		return self.newconnections
-
-
-	def PrintToFile(self, outfile):
-		'''Print .pdb file of PDB class'''
-		o = open(outfile,'w')
-		o.write(self.header)
-		for atom in range(len(self.atomindices)):
-			o.write('{0:6s}{1:5d} {2:4s} {3:3s}  {4:4d}    {5:8.3f}{6:8.3f}{7:8.3f} {8:s}\n'\
-			.format(self.atomtype[atom], self.atomindices[atom], self.atomidentities[atom]\
-			, self.fragmentnames[atom], self.fragmentnumber[atom], self.x[atom], self.y[atom]\
-			, self.z[atom], self.atomlinetail[atom]))
-		for con in range(len(self.connections)):
-			o.write('CONECT{0:5s}{1:5s}\n'.format(self.connections[con][1],\
-			self.connections[con][2]))
-		o.write('END')
-		o.close()
-
-	def AddConnectionToList(self, atom1, atom2):
-		'''Add connection between 2 atoms'''
-		self.connections.append(['CONECT','{:>5}'.format(str(atom1[0])),\
-		'{:>5}'.format(str(atom2[0]))])
-
+					self.bonds.append({'i': int(atom_1['index']-1), 'j': int(atom_2['index']-1)})
+					self.newConnections_created.append([atom_1, atom_2])
+	
 	def reportConnections(self):
-		types_of_connections = []
-		connections = []
-		for i in range(len(self.connections_created)):
-			if self.connections_created[i] not in types_of_connections:
-				types_of_connections.append(self.connections_created[i])
-				connections.append(1)
+		'''Print output report of connections created for each atom pair'''
+		at_con = []; no_con = []; no_at_con = []
+		
+		# Check every connection
+		for i in range(len(self.newConnections_created)):
+			con = self.newConnections_created[i]
+			new_con = [con[0]['name'],con[1]['name'],con[0]['frag'],con[1]['frag']]
+			
+			# Count connections between atom:residue pairs
+			if new_con not in at_con:
+				at_con.append(new_con)
+				no_con.append(1)
 			else:
 				j=0;
-				for j in range(len(types_of_connections)):
-					if types_of_connections[j] == self.connections_created[i]:
-						connections[j]+=1
-		for i in range(len(connections)):
-			print('  Created {0} bond(s) between {1} and {2} atoms {3} times'\
-			.format(types_of_connections[i][0], types_of_connections[i][1],\
-			types_of_connections[i][2],connections[i]))
+				for j in range(len(at_con)):
+					if at_con[j] == new_con:
+						no_con[j]+=1
+		
+		# Print number of bonds creates per atom:residue pair
+		for i in range(len(no_con)):
+			print(' {0} Bonds created between atom:{1} in residue:{2} and atom:{3} in residue:{4}'.format(no_con[i], at_con[i][0], at_con[i][2], at_con[i][1], at_con[i][3]))
+
+
+
+# ------------------------
+
+def indent_xml(elem, level=0, hor=' ', ver='\n'):
+	'''pretty-print xml tree'''
+	
+	spc = ver + level * hor
+	if len(elem):
+		if not elem.text or not elem.text.strip():
+			elem.text = spc + hor
+		if not elem.tail or not elem.tail.strip():
+			elem.tail = spc
+		for elem in elem:
+			indent_xml(elem, level + 1, hor, ver)
+		if not elem.tail or not elem.tail.strip():
+			elem.tail = spc
+	else:
+		if level and (not elem.tail or not elem.tail.strip()):
+			elem.tail = spc
+
+
+
+# ---------------------
 
 class XmlFile(object):
 	'''Class object for xml force field files for openMM'''
-	def __init__(self, datafile):
-		self.header = ""
-		f = open(datafile, "r")
-		self.no_atoms = self.no_residues = self.no_bonds = self.no_angles = \
-		self.no_dihedrals = self.no_nonbond = self.no_LJ = 0
-		'''Determines number of atoms, residues, bonds, angles, dihedrals,
-		and Lennard Jones parameters'''
-		while True:
-			line = f.readline().strip()
-			if len(line) == 0:
-				continue
-			if line == '<AtomTypes>':
-				line = f.readline().strip()
-				while line != '</AtomTypes>':
-					self.no_atoms+=1;line = f.readline().strip()
-			if line == '<Residues>':
-				line = f.readline().strip()
-				while line != '</Residues>':
-					if '<Residue' in line:
-						self.no_residues+=1
-					line = f.readline().strip()
-			if line == '<HarmonicBondForce>':
-				line = f.readline().strip()
-				while line != '</HarmonicBondForce>':
-					self.no_bonds+=1;line = f.readline().strip()
-			if line == '<HarmonicAngleForce>':
-				line = f.readline().strip()
-				while line != '</HarmonicAngleForce>':
-					self.no_angles+=1;line = f.readline().strip()
-			if line == '<RBTorsionForce>':
-				line = f.readline().strip()
-				while line != '</RBTorsionForce>':
-					self.no_dihedrals+=1;line = f.readline().strip()
-			if '<NonbondedForce' in line:
-				line = f.readline().strip()
-				while line != '</NonbondedForce>':
-					self.no_nonbond+=1;line = f.readline().strip()			
-			if '<LennardJonesForce' in line:
-				line = f.readline().strip()
-				while line != '</LennardJonesForce>':
-					self.no_LJ+=1;line = f.readline().strip()
-			if line == '</ForceField>':
-				break
-		'''Extract atoms, residues, bonds, angles, dihedrals, and 
-		Lennard Jones parameters from force field file'''
-		self.atoms = [None]*self.no_atoms;at_no = 0
-		self.residues = [None]*self.no_residues;res_no = 0
-		self.bonds = [None]*self.no_bonds;bond_no = 0
-		self.angles = [None]*self.no_angles;ang_no = 0
-		self.dihedrals = [None]*self.no_dihedrals;dihed_no = 0
-		self.nonbond = [None]*self.no_nonbond;nonbond_no = 0
-		self.LJ = [None]*self.no_LJ;LJ_no = 0
-		f.seek(0)
-		while True:
-			line = f.readline().strip()
-			if len(line) == 0:
-				continue
-			if line == '<AtomTypes>':
-				line = f.readline().strip()
-				while line != '</AtomTypes>':
-					self.atoms[at_no] = Atom(line)
-					at_no+=1
-					line = f.readline().strip()
-			if line == '<Residues>':
-				line = f.readline()
-				while '</Residues>' not in line:
-					if '<Residue' in line:
-						Res = ''
-						while '</Residue>' not in line:
-							Res+=line
-							line = f.readline()
-						Res+=line
-						self.residues[res_no] = Residue(Res)
-						res_no+=1
-						line = f.readline()
-			if line == '<HarmonicBondForce>':
-				line = f.readline().strip()
-				while line != '</HarmonicBondForce>':
-					self.bonds[bond_no] = Bond(line)
-					bond_no+=1
-					line = f.readline().strip()
-			if line == '<HarmonicAngleForce>':
-				line = f.readline().strip()
-				while line != '</HarmonicAngleForce>':
-					self.angles[ang_no] = Angle(line)
-					ang_no+=1
-					line = f.readline().strip()
-			if line == '<RBTorsionForce>':
-				line = f.readline().strip()
-				while line != '</RBTorsionForce>':
-					self.dihedrals[dihed_no] = Dihedral(line)
-					dihed_no+=1
-					line = f.readline().strip()
-			if '<NonbondedForce' in line:
-				line = f.readline().strip()
-				while line != '</NonbondedForce>':
-					self.nonbond[nonbond_no] = line
-					nonbond_no+=1
-					line = f.readline().strip()
-			if '<LennardJonesForce' in line:
-				line = f.readline().strip()
-				while line != '</LennardJonesForce>':
-					self.LJ[LJ_no] = line
-					LJ_no+=1
-					line = f.readline().strip()
-			if line == '</ForceField>':
-				break
-		f.close()
-	
-	def PrintToFile(self, outfile, atoms):
-		'''Function to output to an xml file'''
-		o = open(outfile,'w')
-		o.write('<!-- Atoms connected with external bonds {0} -->\n'\
-		.format(atoms))
-		o.write('<ForceField>\n')
-		o.write(' <AtomTypes>\n')
-		for atom in self.atoms:
-			o.write(atom.output() + '\n')
-		o.write(' </AtomTypes>\n')
-		o.write(' <Residues>\n')
-		for residue in self.residues:
-			o.write(residue.output() + '\n')
-		o.write(' </Residues>\n')
-		o.write(' <HarmonicBondForce>\n')
-		for bond in self.bonds:
-			o.write(bond.output() + '\n')
-		o.write(' </HarmonicBondForce>\n')
-		o.write(' <HarmonicAngleForce>\n')
-		for angle in self.angles:
-			o.write(angle.output() + '\n')
-		o.write(' </HarmonicAngleForce>\n')
-		o.write(' <RBTorsionForce>\n')
-		for dihedral in self.dihedrals:
-			o.write(dihedral.output() + '\n')
-		o.write(' </RBTorsionForce>\n')
-		o.write(' <NonbondedForce coulomb14scale="0.5" lj14scale="0.5">\n')
-		for nonbond in self.nonbond:
-			o.write('  ' + nonbond + '\n')
-		o.write(' </NonbondedForce>\n')
-		o.write(' <LennardJonesForce lj14scale="0.5">\n')
-		for LJ in self.LJ:
-			o.write('  ' + LJ + '\n')
-		o.write(' </LennardJonesForce>\n')
-		o.write('</ForceField>')
-		o.close()
-	
-	def AddParams(self, forcefield):
-		'''Function to add forcefield parameters to force field'''
-		for atom in forcefield.atoms:
+	def __init__(self, infile):
+		'''element tree from xml file'''
+		self.ftree = ET.parse(infile)
+		self.root = self.ftree.getroot()
+
+	def PrintToFile(self, outfile):
+		'''write force field to xml file'''
+		indent_xml(self.root)
+		self.ftree.write(outfile)
+
+	def AddParams(self, ff):
+		'''Add params file data to xml'''
+		for atom in ff.atoms:
 			print('------------------------------------------------------------------\n'\
 			'WARNING: ATOMS FOUND IN ADDITION FORCE FIELD FILE\nThe ability to add atoms '\
 			'is not included here, all atoms\nshould be included in original fftool input.'\
 			'\n------------------------------------------------------------------')
-		'''Check bond is between 2 valid atoms, and add to force field class if so.'''
-		for bond in forcefield.bonds:
+		
+		for bond in ff.bonds:
+			# Chack bond is of valid type
 			if bond[2] != 'harm':
 				print('ERROR: Currently only harmonic bonds are supported')
 				sys.exit(1)
-			else:
-				at1 = bond[0]; at2 = bond[1]
-				at1inFF = False; at2inFF = False
-				length = bond[3][0]/10.
-				strength = bond[3][1]*100.
-				for allatoms in self.atoms:
-					if at1==allatoms.atomclass:
-						at1inFF = True
-					if at2==allatoms.atomclass:
-						at2inFF = True
-				if at1inFF and at2inFF:
-					self.bonds.append(Bond('  <Bond class1="{0}" class2="{1}" length="{2:.5f}" k="{3:.1f}" />'.format(at1,at2,length,strength)))
-					print(' Bond added to force field: {0} - {1}'.format(at1,at2))
-				elif not at1inFF:	
-					print('ERROR: cannot find atom {0} in force field'.format(at1))
-				elif not at2inFF:	
-					print('ERROR: cannot find atom {0} in force field'.format(at2))
-		'''Check angle is between 3 valid atoms, and add to force field class if so.'''
-		for angle in forcefield.angles:
+			
+			# Load bond parameters from input .ff file
+			at1 = bond[0]; at2 = bond[1]
+			at1inFF = False; at2inFF = False
+			length = bond[3][0]/10.; k = bond[3][1]*100.
+			
+			# Check atoms in bond are valid atoms in xml file
+			atomtypes = self.root.find('AtomTypes')
+			for atom in atomtypes:
+				atom_class = atom.get('class')
+				if at1 == atom_class:
+					at1inFF = True
+				if at2 == atom_class:
+					at2inFF = True
+			
+			# If atoms are valid put into xml file. Print error if not.
+			if at1inFF and at2inFF:
+				bondtypes = self.root.find('HarmonicBondForce')
+				newbond = ET.SubElement(bondtypes, 'Bond')
+				newbond.set('class1', at1)
+				newbond.set('class2', at2)
+				newbond.set('length', '{0:.5f}'.format(length))
+				newbond.set('k', '{0:.1f}'.format(k))
+				print(' Bond added to force field: {0} - {1}'.format(at1,at2))
+			elif not at1inFF:	
+				print('ERROR: cannot find atom {0} in force field'.format(at1))
+			elif not at2inFF:	
+				print('ERROR: cannot find atom {0} in force field'.format(at2))
+		
+		for angle in ff.angles:
+			# Check angle is of valid type
 			if angle[3] != 'harm':
 				print('ERROR: Currently only harmonic angles are supported')
 				sys.exit(1)
-			else:
-				at1 = angle[0];at2 = angle[1]; at3 = angle[2]
-				at1inFF = False; at2inFF = False; at3inFF = False
-				ang = angle[4][0] * np.pi/180.0
-				strength = angle[4][1]
-				for allatoms in self.atoms:
-					if at1==allatoms.atomclass:
-						at1inFF = True
-					if at2==allatoms.atomclass:
-						at2inFF = True
-					if at3==allatoms.atomclass:
-						at3inFF = True
-				if at1inFF and at2inFF and at3inFF:
-					self.angles.append(Angle('  <Angle class1="{0}" '\
-					'class2="{1}" class3="{2}" angle="{3:.5f}" k="{4:.2f}" '\
-					'/>'.format(at1,at2,at3,ang,strength)))
-					print(' Angle added to force field: {0} - {1} - {2}'.format(at1,at2,at3))
-				elif not at1inFF:	
-					print('ERROR: cannot find atom {0} in force field'.format(at1))
-				elif not at2inFF:	
-					print('ERROR: cannot find atom {0} in force field'.format(at2))
-				elif not at3inFF:	
-					print('ERROR: cannot find atom {0} in force field'.format(at3))
-		'''Check dihedral is between 4 valid atoms, and add to force field class if so.'''
-		for dihed in forcefield.dihedrals:
+			
+			# Load angle parameters from input .ff file
+			at1 = angle[0]; at2 = angle[1]; at3 = angle[2]
+			at1inFF = False; at2inFF = False; at3inFF = False
+			ang = angle[4][0] * np.pi/180.0; k = angle[4][1]
+			
+			# Check atoms in angle are valid atoms in xml file
+			atomtypes = self.root.find('AtomTypes')
+			for atom in atomtypes:
+				atom_class = atom.get('class')
+				if at1 == atom_class:
+					at1inFF = True
+				if at2 == atom_class:
+					at2inFF = True
+				if at3 == atom_class:
+					at3inFF = True
+			
+			# If atoms are valid put into xml file. Print error if not.
+			if at1inFF and at2inFF and at3inFF:
+				angtypes = self.root.find('HarmonicAngleForce')
+				newang = ET.SubElement(angtypes, 'Angle')
+				newang.set('class1', at1)
+				newang.set('class2', at2)
+				newang.set('class3', at3)
+				newang.set('angle', '{0:.5f}'.format(ang))
+				newang.set('k', '{0:.2f}'.format(k))
+				print(' Angle added to force field: {0} - {1} - {2}'.format(at1,at2,at3))
+			elif not at1inFF:	
+				print('ERROR: cannot find atom {0} in force field'.format(at1))
+			elif not at2inFF:	
+				print('ERROR: cannot find atom {0} in force field'.format(at2))
+			elif not at3inFF:	
+				print('ERROR: cannot find atom {0} in force field'.format(at3))
+		
+		for dihed in ff.dihedrals:
+			# Check dihedral is of valid type
 			if dihed[4] != 'opls':
 				print('ERROR: Currently only opls dihedrals are supported')
 				sys.exit(1)
-			else:
-				at1 = dihed[0];at2 = dihed[1]; at3 = dihed[2];at4 = dihed[3]
-				at1inFF = False; at2inFF = False; at3inFF = False; at4inFF = False
-				par0 = dihed[5][0];par1 = dihed[5][1]
-				par2 = dihed[5][2];par3 = dihed[5][3]
-				eps = 1e-12
-				'''convert OPLS to RB -- from fftool'''
-				c0 = par1 + 0.5 * (par0 + par2) + eps
-				c1 = 0.5 * (-par0 + 3 * par2) + eps
-				c2 = -par1 + 4 * par3 + eps
-				c3 = -2 * par2 + eps;c4 = -4 * par3 + eps;c5 = 0.0
-				for allatoms in self.atoms:
-					if at1==allatoms.atomclass:
-						at1inFF = True
-					if at2==allatoms.atomclass:
-						at2inFF = True
-					if at3==allatoms.atomclass:
-						at3inFF = True
-					if at4==allatoms.atomclass:
-						at4inFF = True
-				if at1inFF and at2inFF and at3inFF and at4inFF:
-					self.dihedrals.append(Dihedral('<Proper class1="{0}" '\
-					'class2="{1}" class3="{2}" class4="{3}" c0="{4:.5f}" '\
-					'c1="{5:.5f}" c2="{6:.5f}" c3="{7:.5f}" c4="{8:.5f}" '\
-					'c5="{9:.5f}" />'.format(at1,at2,at3,at4,c0,c1,c2,c3,c4,c5)))
-					print(' Dihedral added to force field: {0} - {1} - {2} - {3}'.format(at1,at2,at3,at4))
-				elif not at1inFF:	
-					print('ERROR: cannot find atom {0} in force field'.format(at1))
-				elif not at2inFF:	
-					print('ERROR: cannot find atom {0} in force field'.format(at2))
-				elif not at3inFF:	
-					print('ERROR: cannot find atom {0} in force field'.format(at3))
-				elif not at4inFF:	
-					print('ERROR: cannot find atom {0} in force field'.format(at4))
-		'''Check improper is between 4 valid atoms, and add to force field class if so.'''
-		for improp in forcefield.impropers:
+			
+			# Load dihedral parameters from input .ff file
+			at1 = dihed[0];at2 = dihed[1]; at3 = dihed[2];at4 = dihed[3]
+			at1inFF = False; at2inFF = False; at3inFF = False; at4inFF = False
+			par0 = dihed[5][0]; par1 = dihed[5][1]; par2 = dihed[5][2]; par3 = dihed[5][3]
+			eps = 1e-12
+			#convert OPLS to RB -- from fftool
+			c0 = par1 + 0.5 * (par0 + par2) + eps
+			c1 = 0.5 * (-par0 + 3 * par2) + eps
+			c2 = -par1 + 4 * par3 + eps
+			c3 = -2 * par2 + eps; c4 = -4 * par3 + eps; c5 = 0.0
+			
+			# Check atoms in dihedral are valid atoms in xml file
+			atomtypes = self.root.find('AtomTypes')
+			for atom in atomtypes:
+				atom_class = atom.get('class')
+				if at1 == atom_class:
+					at1inFF = True
+				if at2 == atom_class:
+					at2inFF = True
+				if at3 == atom_class:
+					at3inFF = True
+				if at4 == atom_class:
+					at4inFF = True
+			
+			# If atoms are valid put into xml file. Print error if not.
+			if at1inFF and at2inFF and at3inFF and at4inFF:
+				dihedtypes = self.root.find('RBTorsionForce')
+				newdihed = ET.SubElement(dihedtypes, 'Proper')
+				newdihed.set('c0', '{0:.5f}'.format(c0)); newdihed.set('c1', '{0:.5f}'.format(c1))
+				newdihed.set('c2', '{0:.5f}'.format(c2)); newdihed.set('c3', '{0:.5f}'.format(c3))
+				newdihed.set('c4', '{0:.5f}'.format(c4)); newdihed.set('c5', '{0:.5f}'.format(c5))
+				newdihed.set('class1', at1); newdihed.set('class2', at2)
+				newdihed.set('class3', at3); newdihed.set('class4', at4)
+				print(' Dihedral added to force field: {0} - {1} - {2} - {3}'.format(at1,at2,at3,at4))
+			elif not at1inFF:	
+				print('ERROR: cannot find atom {0} in force field'.format(at1))
+			elif not at2inFF:	
+				print('ERROR: cannot find atom {0} in force field'.format(at2))
+			elif not at3inFF:	
+				print('ERROR: cannot find atom {0} in force field'.format(at3))
+			elif not at4inFF:	
+				print('ERROR: cannot find atom {0} in force field'.format(at4))
+		
+		for improp in ff.impropers:
+			# Check improper is of valid type
 			if improp[4] != 'opls':
 				print('ERROR: Currently only opls improper dihedrals are supported')
 				sys.exit(1)
-			else:
-				at1 = improp[0];at2 = improp[1]; at3 = improp[2];at4 = improp[3]
-				at1inFF = False; at2inFF = False; at3inFF = False; at4inFF = False
-				par0 = improp[5][0];par1 = improp[5][1]
-				par2 = improp[5][2];par3 = improp[5][3]
-				eps = 1e-12
-				'''convert OPLS to RB -- from fftool'''
-				c0 = par1 + 0.5 * (par0 + par2) + eps
-				c1 = 0.5 * (-par0 + 3 * par2) + eps
-				c2 = -par1 + 4 * par3 + eps
-				c3 = -2 * par2 + eps;c4 = -4 * par3 + eps;c5 = 0.0
-				for allatoms in self.atoms:
-					if at1==allatoms.atomclass:
-						at1inFF = True
-					if at2==allatoms.atomclass:
-						at2inFF = True
-					if at3==allatoms.atomclass:
-						at3inFF = True
-					if at4==allatoms.atomclass:
-						at4inFF = True
-				if at1inFF and at2inFF and at3inFF and at4inFF:
-					self.dihedrals.append(Dihedral('<Improper class1="{0}" '\
-					'class2="{1}" class3="{2}" class4="{3}" c0="{4:.5f}" '\
-					'c1="{5:.5f}" c2="{6:.5f}" c3="{7:.5f}" c4="{8:.5f}" '\
-					'c5="{9:.5f}" />'.format(at1,at2,at3,at4,c0,c1,c2,c3,c4,c5)))
-					print(' Improper dihedral added to force field: {0} - {1} - '\
-					'{2} - {3}'.format(at1,at2,at3,at4))
-				elif not at1inFF:	
-					print('ERROR: cannot find atom {0} in force field'.format(at1))
-				elif not at2inFF:	
-					print('ERROR: cannot find atom {0} in force field'.format(at2))
-				elif not at3inFF:	
-					print('ERROR: cannot find atom {0} in force field'.format(at3))
-				elif not at4inFF:	
-					print('ERROR: cannot find atom {0} in force field'.format(at3))
-	'''	
-	def oldAddExternalBonds(self,atoms):
-		#Comments explain what line below does, as this is a bit confusing.
-		#For each atom to add, pull out atom type and fragment name
-		for i in range(2):
-			atom = atoms[i].split(',')[0]
-			frag = atoms[i].split(',')[1]
-			#Then, for every residue...
-			for residue in self.residues:
-				#if residue is the fragment for the additional atom...
-				if residue.name==frag:
-					#check all of the atoms in the residue...
-					for allatoms in residue.atoms:
-						#if the atom type matches the input atom
-						if allatoms[0].split(',')[1]==atom:
-							#then pull out atom name...
-							atom_name = allatoms[0].split(',')[0]
-							#and if an external bond flag is not currently there...
-							if [atom_name] not in residue.externalbonds:
-								#add external bond flag with the atom name
-								residue.AddExternalBondFlags(atom_name)
-	'''
-	
-	def AddExternalBonds(self,newConnections):
-		'''takes list of new connections and figures out how many external bond 
-		flags to add to each residue'''
-		connections = deepcopy(newConnections)
-		'''Create list of lists in format:
-		[count of atom, [atom indices, atom identity], fragname]'''
-		newCon_count = []
-		while True:
-			if len(connections)==0:
-				break
-			else:
-				connection = connections[0]
-				counter = connections.count(connection)
-				newCon_count.append([counter, connection])
-				while counter>0:
-					connections.remove(connection)
-					counter = connections.count(connection)
-		'''Create a list of atom identities and a dictionary 
-		with a unique index for each '''
-		atom_id_ext = []
-		id_dict = dict(); i = 0
-		for item in newCon_count:
-			atom_id = item[1][1]
-			if atom_id not in atom_id_ext:
-				id_dict[atom_id] = i
-				atom_id_ext.append(atom_id) 
-				i+=1
-		'''Use dictionary to add external counts and atom index lists'''
-		ext_bond_count = [[]]*len(atom_id_ext)
-		atom_ind_list = [[]]*len(atom_id_ext)
-		frag_list = [[]]*len(atom_id_ext)
-		for item in newCon_count:
-			count = item[0]
-			atom_ind = item[1][0]
-			atom_id = item[1][1]
-			frag_id = item[1][2]
-			idx = id_dict[atom_id]
-			ext_bond_count[idx] = ext_bond_count[idx] + [count]
-			atom_ind_list[idx] = atom_ind_list[idx] + [atom_ind]
-			frag_list[idx] = frag_list[idx] + [frag_id]		
-		'''Check that all atoms of the same type have the same 
-		number of external bonds'''
-		for i in range(len(atom_id_ext)):
-			atom_id = atom_id_ext[i]
-			frag_ids = list(set(frag_list[i]))
-			noExtBonds = list(set(ext_bond_count[i]))
-			'''Check that each atom h'''
-			if len(noExtBonds)>1:
-				print('ERROR: Atom {0} has different numbers of external bonds'.\
-				format(atom_id))
+			
+			# Load improper parameters from input .ff file
+			at1 = improp[0];at2 = improp[1]; at3 = improp[2];at4 = improp[3]
+			at1inFF = False; at2inFF = False; at3inFF = False; at4inFF = False
+			par0 = improp[5][0]; par1 = improp[5][1]; par2 = improp[5][2]; par3 = improp[5][3]
+			eps = 1e-12
+			#convert OPLS to RB -- from fftool
+			c0 = par1 + 0.5 * (par0 + par2) + eps
+			c1 = 0.5 * (-par0 + 3 * par2) + eps
+			c2 = -par1 + 4 * par3 + eps
+			c3 = -2 * par2 + eps; c4 = -4 * par3 + eps; c5 = 0.0
+			
+			# Check atoms in improper are valid atoms in xml file
+			atomtypes = self.root.find('AtomTypes')
+			for atom in atomtypes:
+				atom_class = atom.get('class')
+				if at1 == atom_class:
+					at1inFF = True
+				if at2 == atom_class:
+					at2inFF = True
+				if at3 == atom_class:
+					at3inFF = True
+				if at4 == atom_class:
+					at4inFF = True
+			
+			# If atoms are valid put into xml file. Print error if not.
+			if at1inFF and at2inFF and at3inFF and at4inFF:
+				dihedtypes = self.root.find('RBTorsionForce')
+				newdihed = ET.SubElement(dihedtypes, 'Improper')
+				newdihed.set('c0', '{0:.5f}'.format(c0)); newdihed.set('c1', '{0:.5f}'.format(c1))
+				newdihed.set('c2', '{0:.5f}'.format(c2)); newdihed.set('c3', '{0:.5f}'.format(c3))
+				newdihed.set('c4', '{0:.5f}'.format(c4)); newdihed.set('c5', '{0:.5f}'.format(c5))
+				newdihed.set('class1', at1); newdihed.set('class2', at2)
+				newdihed.set('class3', at3); newdihed.set('class4', at4)
+				print(' Improper dihedral added to force field: {0} - {1} - {2} - {3}'.format(at1,at2,at3,at4))
+			elif not at1inFF:	
+				print('ERROR: cannot find atom {0} in force field'.format(at1))
+			elif not at2inFF:	
+				print('ERROR: cannot find atom {0} in force field'.format(at2))
+			elif not at3inFF:	
+				print('ERROR: cannot find atom {0} in force field'.format(at3))
+			elif not at4inFF:	
+				print('ERROR: cannot find atom {0} in force field'.format(at4))
+
+	def AddExternalBonds(self, pdb):
+		'''Add external bonds to xml'''
+		bondsCreated = pdb.newConnections_created
+		# List of atoms and number of times they appear in new bond list 
+		ext_bond_atom_list = []
+		atom_list = []
+		count_list = []
+		
+		for bond in bondsCreated:
+			for atom in bond:
+				at_list = [atom['index'],atom['name'],atom['frag']]
+				if at_list not in atom_list:
+					atom_list.append(at_list)
+					count_list.append(1)
+				else:
+					for i in range(len(atom_list)):
+						if atom_list[i] == at_list:
+							count_list[i]+=1
+		
+		# Use this list to find number of external bonds per atom:residue pair
+		ext = []; ext_check = []
+		for i in range(len(atom_list)):
+			at = atom_list[i][1]
+			frag = atom_list[i][2]
+			count = count_list[i]
+			at_ext = [at, frag, count]
+			if at_ext not in ext:
+				ext.append(at_ext)
+				ext_check.append([at, frag])
+		
+		# Check number of times each atom:res pair appears in list, if more than one then print error and exit	
+		for i in range(len(ext_check)):
+			ext_count = ext_check.count(ext_check[i])
+			if ext_count>1:
+				print('ERROR: Atom {0} in residue {1} has multiple ExternalBonds of different types'.format(ext_check[i][0],ext_check[i][1]))
 				sys.exit(1)
-			noExtBonds = int(noExtBonds[0])
-			'''for every residue'''
-			for residue in self.residues:
-				'''if residue contains atoms needing an external bond...'''
-				if residue.name in frag_ids:
-					'''check all of the atoms in the residue...'''
-					for allatoms in residue.atoms:
-						'''if the atom type matches the input atom...'''
-						if allatoms[0].split(',')[0]==atom_id:
-								'''add external bond flag with the atom name once 
-								for every external atom'''
-								for j in range(noExtBonds):
-									residue.AddExternalBondFlags(atom_id)
-		#print(ext_bond_count)
-		#print(atom_ind_list)
+		
+		# Check residues for atoms and residues that match those that need external bonds and add external bonds to residues 
+		print('Adding external bond flags')
+		residues = self.root.find('Residues')
+		for ext_it in ext:
+			at = ext_it[0]
+			frag = ext_it[1]
+			nobonds = ext_it[2]
+			for residue in residues:
+				res_name = residue.get('name')
+				if res_name == frag:
+					for ffatom in residue.iter('Atom'):
+						if ffatom.get('name') == at:
+							for i in range(nobonds):	
+								newExt = ET.SubElement(residue, 'ExternalBond')
+								newExt.set('atomName', at)
+							print(' Added {0} ExternalBond flags added for atom {1} in residue {2}'.format(nobonds, at, frag))
 
 
-class Residue(object):
-	'''Class object for a residue in an xml force field files for openMM'''
-	def __init__(self, residue):
-		self.name = ""
-		self.atoms = []
-		self.bonds = []
-		self.externalbonds = []
-		for tok in residue.split('\n'):
-			tok = tok.strip()
-			if '<Residue name=' in tok:
-				self.name = tok.split('"')[1]
-			elif '<Atom' in tok:
-				self.atoms.append(['{0},{1}'.format(tok.split('"')[1],tok.split('"')[3])])
-			elif '<Bond' in tok:
-				self.bonds.append(['{0},{1}'.format(tok.split('"')[1],tok.split('"')[3])])
-			elif '<ExternalBond' in tok:
-				self.externalbonds.append([tok.split('"')[1]])
-	
-	def output(self):
-		str = '  <Residue name="' + self.name + '">\n'
-		for atomno in range(len(self.atoms)):	
-			tok = self.atoms[atomno]
-			tok = tok[0].split(',')
-			str += '   <Atom name="' + tok[0] + '" type="' + tok[1] + '" />\n'
-		for bondno in range(len(self.bonds)):
-			tok = self.bonds[bondno]
-			tok = tok[0].split(',')
-			str += '   <Bond atomName1="' + tok[0] + '" atomName2="' + tok[1] + '" />\n'
-		for extbondno in range(len(self.externalbonds)):
-			tok = self.externalbonds[extbondno]
-			str += '   <ExternalBond atomName="' + tok[0] + '" />\n'
-		str+='  </Residue>'
-		return str
-		
-	def AddExternalBondFlags(self, atom):
-		'''Add external bond flags to residues'''
-		self.externalbonds.append([atom])
-		print('  Added external bond flag for atom {0} in fragment {1}'\
-		.format(atom, self.name))
-		
-class Atom(object):
-	'''Class object for a bond from an xml force field files for openMM.
-	Units are: length = nm ; energy = 1/100th kj/mol '''
-	
-	def __init__(self, atom):
-		tok = atom.split('"')
-		self.atomname = tok[1]
-		self.atomclass = tok[3]
-		self.element = tok[5]
-		self.mass = tok[7]
-	
-	def output(self):
-		'''Function to call for correct output format.'''
-		str = '  <Type name="' + self.atomname + '" class="' + self.atomclass
-		str+= '" element="' + self.element + '" mass="' + self.mass + '" />'
-		return str
-	
-	def GetAtomClass(self):
-		return self.atomclass
-		
-class Bond(object):
-	'''Class object for a bond from an xml force field files for openMM.
-	Units are: length = nm ; energy = 1/100th kj/mol '''
-	
-	def __init__(self, bond):
-		tok = bond.split('"')
-		self.atom1 = tok[1]
-		self.atom2 = tok[3]
-		self.length = tok[5]
-		self.strength = tok[7]
-	
-	def output(self):
-		'''Function to call for correct output format.'''
-		str = '  <Bond class1="' + self.atom1 + '" class2="' + self.atom2
-		str+= '" length="' + self.length + '" k="' + self.strength + '" />'
-		return str
-		
-class Angle(object):
-	'''Class object for an angle from an xml force field files for openMM.
-	Units are: angle = radians ; energy = kj/mol '''
-	
-	def __init__(self, angle):
-		tok = angle.split('"')
-		self.atom1 = tok[1]
-		self.atom2 = tok[3]
-		self.atom3 = tok[5]
-		self.angle = tok[7]
-		self.strength = tok[9]
-	
-	def output(self):
-		'''Function to call for correct output format.'''
-		str = '  <Angle class1="' + self.atom1 + '" class2="' + self.atom2
-		str+= '" class3="' + self.atom3 + '" angle="' + self.angle + '" k="' 
-		str+= self.strength + '" />'
-		return str
-		
-class Dihedral(object):
-	'''Class object for a dihedral from an xml force field files for openMM.
-	Units are kj/mol '''
-	
-	def __init__(self, dihedral):
-		if 'Proper' in dihedral:
-			self.type = 'Proper'
-		elif 'Improper' in dihedral:
-			self.type = 'Improper'
-		else:
-			print('ERROR: currently unsupported dihedral')
-			sys.exit(1)
-		tok = dihedral.split('"')
-		self.atom1 = tok[1]
-		self.atom2 = tok[3]
-		self.atom3 = tok[5]
-		self.atom4 = tok[7]
-		self.c0 = tok[9]
-		self.c1 = tok[11]
-		self.c2 = tok[13]
-		self.c3 = tok[15]
-		self.c4 = tok[17]
-		self.c5 = tok[19]
-	
-	def output(self):
-		'''Function to call for correct output format.'''
-		str = '  <' + self.type + ' class1="' + self.atom1 + '" class2="' + self.atom2 + '" class3="' + self.atom3 + '" class4="' + self.atom4 + '" c0="' + self.c0 + '" c1="' + self.c1 + '" c2="' + self.c2 + '" c3="' + self.c3 + '" c4="' + self.c4 + '" c5="' + self.c5 + '" />'
-		return str
 
-class Params(object):
+#--------------------
+
+class Params(object):	
 	''' Parameters in force field file. init from fftool.'''
 	def __init__(self, filename):
+		
 		self.filename = filename
 		self.atoms = []
 		self.bonds = []
 		self.angles = []
 		self.dihedrals = []
 		self.impropers = []
-        
 		for line in open(filename, 'r'):
 			if line.startswith('#') or line.strip() == '':
 				continue
@@ -801,6 +507,8 @@ class Params(object):
 
 
 
+#----------------
+
 def main():
 	parser = argparse.ArgumentParser(
 		description = 'Take a .pdb file with residues created using fftool and connects the specified atoms across residues in the .pdb structure file (with connect commands). Will also add bond, angle, and dihedral data to the .xml force field file from the input force field. This includes adding external bond flags between residues.\n NOTE: Does not import atoms or LJ parameters in force field file, just reads these in and outputs as they appear in original force field. Therefore these cannot be edited in force fields.')
@@ -822,7 +530,7 @@ def main():
 		print('ERROR: Must specify fragments in pairs')
 		sys.exit(1)
 	else:
-		nopairs = len(args.fragments)/2
+		nopairs = int(len(args.fragments)/2)
 		print(' {0} pair(s) of atoms.'.format(nopairs))
 		atoms_1 = [None]*nopairs; atoms_2 = [None]*nopairs
 		frags_1 = [None]*nopairs; frags_2 = [None]*nopairs
@@ -839,24 +547,21 @@ def main():
 	ForceField = XmlFile(args.inffile)
 	ParametersToAdd = Params(args.fffile)
 	
-	print('Adding new force field parameters to force field')
+	print('Adding new parameters to force field file')
 	ForceField.AddParams(ParametersToAdd)
-
-	print('Adding connections to pdb file')
-	Atoms.buildValidAtomList(ForceField)
-	newConnections = []
-	for pair in range(nopairs):
-		newConnections = Atoms.addConnection(','.join([atoms_1[pair],frags_1[pair]]), ','.join([atoms_2[pair],frags_2[pair]]), ForceField)
 	
+	print('Adding connections and external bonds')
+	for i in range(nopairs):
+		Atoms.AddConnection(','.join([atoms_1[i],frags_1[i]]), ','.join([atoms_2[i],frags_2[i]]), ForceField)
+	Atoms.reportConnections()
+	ForceField.AddExternalBonds(Atoms)
 	
-	print('Adding External Bond flags')
-	ForceField.AddExternalBonds(newConnections)
-	
-	print('Printing new pdb file')
 	Atoms.PrintToFile(args.outdfile)
-	
-	print('Printing new force field file')
-	ForceField.PrintToFile(args.outffile, args.fragments)
+	ForceField.PrintToFile(args.outffile)
+
+
+
+# --------------------------
 
 if __name__ == '__main__':
     main()
