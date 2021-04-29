@@ -1,8 +1,5 @@
-import sys
 import numpy as np
-import math
 import argparse
-import os
 
 def ReadLog (logfile):
 
