@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # polxml.py - add Drude oscillators to OpenMM xml force field file.
 # Agilio Padua <agilio.padua@ens-lyon.fr>
-# version 2021/04/29
+# version 2021/05/12
 
 
 import argparse
@@ -41,6 +41,8 @@ class Topology(object):
         self.box = ''
         self.atoms = []
         self.bonds = []
+        self.natom = 0
+        self.ndrude = 0
 
         with open(pdbfile, 'r') as f:
             line = f.readline()
@@ -73,6 +75,7 @@ class Topology(object):
                     exit(1)
                 self.bonds.append({'i': i, 'j': j})
                 line = f.readline()
+        self.natom = len(self.atoms)
 
     def write(self, pdbfile):
         '''write topology to PDB file'''
@@ -153,6 +156,7 @@ class Topology(object):
         natoms = len(self.atoms)
         random.seed(1234)
         i = 0
+        self.ndrude = 0
         while i < natoms:
             atom = self.atoms[i]
             for dp in dplist:
@@ -167,6 +171,7 @@ class Topology(object):
                     ndp['ele'] = 'EP'
                     i += 1
                     self.atoms.insert(i, ndp)
+                    self.ndrude += 1
                     natoms += 1
                     # increment indices in bonds
                     for bond in self.bonds:
@@ -225,27 +230,11 @@ class Drude(object):
                 drude['k'] = float(tok[3])
                 alpha = float(tok[4])
                 drude['thole'] = float(tok[5])
-                
-                ffatoms = []
-                for res in ff.root.iter('Residue'):
-                    ffatoms.extend([at for at in res.iter('Atom') if \
-                        drude['type'] == at.get('type').split('-')[1]])
-                
-                # checks all maching atom types from field.xml
-                # checks number of H attached to same non-bonded type 
-                if len(ffatoms) > 0:
-                    nH = []
-                    for a in ffatoms:
-                        for att in config.atoms:
-                            if att['name'] == a.attrib['name'] and a.attrib['type'].split('-')[0] == att['mol']:
-                                nH.append(att['nH'])
-                                break
-                    
-                    alpha += att['nH'] * self.alpha_H
-                    if len(list(set((nH)))) > 1 :
-                        #print('warning: {0} non-bonded type has different number of hydrogens attached {1} in {2}; value of {3:.3f} assigned '.format(drude['type'],nH,[x.attrib['type'] for x in ffatoms], alpha))
-                        raise RuntimeError('{0} non-bonded type should have the same number of hydorgent attached: {1} hydrogens in {2}'.format(drude['type'],nH,[x.attrib['type'] for x in ffatoms]))
 
+                for att in config.atoms:
+                    if drude['type'] == att['type']:
+                        alpha += att['nH'] * self.alpha_H
+                        break
                 drude['alpha'] = alpha
 
                 dq = (fpe0 * drude['k'] * alpha)**0.5
@@ -410,6 +399,7 @@ def main():
     print('polarizable force field written to', args.outxml)
     print('adding Drude particles to configuration...')
     config.polarize(ff, args.eps)
+    print('{} atoms {} Drude particles'.format(config.natom, config.ndrude))
     config.write(args.outpdb)
     print('configuration written to', args.outpdb)
 
