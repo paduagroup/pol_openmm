@@ -4,7 +4,7 @@
 # into an openMM xml force field file.
 # Ryan Clark <ryan.clark@ens-lyon.fr>
 # Agilio Padua <agilio.padua@ens-lyon.fr>
-# version 2021/04/28
+# version 2021/05/06
 
 import numpy as np
 import argparse
@@ -14,7 +14,7 @@ import xml.etree.ElementTree as ET
 from copy import deepcopy
 
 #-------------
-bondtol = 1.0
+bondtol = 0.5
 #-------------
 
 def dist2at(at1,at2,boxDim):
@@ -29,6 +29,13 @@ def dist2at(at1,at2,boxDim):
 	z = abs(at1['z']-at2['z'])
 	while z > boxZ/2:
 		z = abs(z-boxZ)
+	return np.sqrt(x**2+y**2+z**2)
+
+def dist2atNoWrap(at1,at2):
+	'''Find shortest distance between 2 atoms given periodic boundary conditions'''
+	x = abs(at1['x']-at2['x'])
+	y = abs(at1['y']-at2['y'])
+	z = abs(at1['z']-at2['z'])
 	return np.sqrt(x**2+y**2+z**2)
 
 
@@ -63,9 +70,9 @@ class PdbFile(object):
 				self.atoms.append(atom)
 				line = f.readline()
 			while 'CONECT' in line:
-				i = int(line[6:11])  - 1
-				j = int(line[11:16]) - 1
-				if self.atoms[i]['seq'] != self.atoms[j]['seq']:
+				i = int(line[6:11])
+				j = int(line[11:16])
+				if self.atoms[i-1]['seq'] != self.atoms[j-1]['seq']:
 					print('WARNING: bond atoms {0:d} and {1:d} not in same molecule'.format(i, j))
 					#sys.exit(1)
 				self.bonds.append({'i': i, 'j': j})
@@ -91,10 +98,10 @@ class PdbFile(object):
 				'{7:>2s}\n'.format(at['index'], at['name'], at['frag'], at['seq'],
 				at['x'], at['y'], at['z'], at['ele']))
 			for bd in self.bonds:
-				f.write('CONECT{0:5d}{1:5d}\n'.format(bd['i']+1, bd['j']+1))
+				f.write('CONECT{0:5d}{1:5d}\n'.format(bd['i'], bd['j']))
 			f.write('END\n')
 
-	def AddConnection(self, atom1, atom2, ff):
+	def AddConnection(self, atom1, atom2, ff, toPDB, ConectFile):
 		'''Add connection between 2 atoms'''
 		atom1_class = atom1.split(',')[0]; atom1_frag = atom1.split(',')[1]
 		atom2_class = atom2.split(',')[0]; atom2_frag = atom2.split(',')[1]
@@ -126,9 +133,9 @@ class PdbFile(object):
 		# Make lists of atoms of the correct type
 		at_1_list = []; at_2_list = []
 		for atom in self.atoms:
-			if atom['name'] in atom1_names and atom['frag'] == atom1_frag:
+			if atom['name'] in atom1_names and atom['frag'] == atom1_frag and atom['name'][0] != 'D':
 				at_1_list.append(atom)
-			if atom['name'] in atom2_names and atom['frag'] == atom2_frag:
+			if atom['name'] in atom2_names and atom['frag'] == atom2_frag and atom['name'][0] != 'D':
 				at_2_list.append(atom)
 		
 		# Run through lists of atoms and connect those close enough according to bond length
@@ -138,7 +145,10 @@ class PdbFile(object):
 				distance = dist2at(atom_1, atom_2, self.boxDimensions)
 				if distance<bond_length+bondtol:
 					no_bonds+=1
-					self.bonds.append({'i': int(atom_1['index']-1), 'j': int(atom_2['index']-1)})
+					if toPDB==True:
+						self.bonds.append({'i': atom_1['index'], 'j': atom_2['index']})
+					else:
+						ConectFile.write('{0:5d}\t{1:5d}\n'.format(atom_1['index'],atom_2['index']))
 					self.newConnections_created.append([atom_1, atom_2])
 	
 	def reportConnections(self):
@@ -164,6 +174,21 @@ class PdbFile(object):
 		for i in range(len(no_con)):
 			print(' {0} Bonds created between atom:{1} in residue:{2} and atom:{3} in residue:{4}'.format(no_con[i], at_con[i][0], at_con[i][2], at_con[i][1], at_con[i][3]))
 
+	def RemoveLongBonds(self):
+		for bond in self.bonds:
+			at1 = bond['i']
+			at2 = bond['j']
+			for atom in self.atoms:
+				if atom['index'] == at1:
+					atom1 = atom
+				if atom['index'] == at2:
+					atom2 = atom
+			dist = dist2atNoWrap(atom1,atom2)
+			#print(atom1,atom2)
+			if dist>10:
+				self.bonds.remove(bond)
+				#print(atom1,atom2)
+				#print(dist)
 
 
 # ------------------------
@@ -379,6 +404,8 @@ class XmlFile(object):
 				print('ERROR: cannot find atom {0} in force field'.format(at3))
 			elif not at4inFF:	
 				print('ERROR: cannot find atom {0} in force field'.format(at4))
+			
+		
 
 	def AddExternalBonds(self, pdb):
 		'''Add external bonds to xml'''
@@ -433,6 +460,11 @@ class XmlFile(object):
 								newExt = ET.SubElement(residue, 'ExternalBond')
 								newExt.set('atomName', at)
 							print(' Added {0} ExternalBond flags added for atom {1} in residue {2}'.format(nobonds, at, frag))
+						
+					
+				
+			
+		
 
 
 
@@ -515,7 +547,9 @@ def main():
 	parser.add_argument('fragments', nargs='+',
 						help = 'atom1,frag1 atom2,frag2 [atom3,frag3 atom4,frag4].... Pairs of atoms to bond together across fragments')
 	parser.add_argument('-f', '--fffile', default = 'frag.ff',
-						help = 'Force field file containing bond, angle and dihedral data to add to .xml file ')  
+						help = 'Force field file containing bond, angle and dihedral data to add to .xml file ') 
+	parser.add_argument('-p', '--conectinpdb', action = 'store_true', 
+						help = 'Print connect to pdb file. If not specified, atoms that need connecting are pritned to file "Conect.txt"') 
 	parser.add_argument('-id', '--indfile', default = 'config.pdb',
 						help = 'input openMM data file (default: config.pdb)')  
 	parser.add_argument('-od', '--outdfile', default = 'config-c.pdb',
@@ -540,6 +574,12 @@ def main():
 			print('  Linking {0} in fragment {1} to {2} in fragment {3}'\
 			.format(atoms_1[i],frags_1[i],atoms_2[i],frags_2[i]))
 	
+	if args.conectinpdb:
+		toPDB = True
+	else:
+		toPDB = False
+		ConectFile = open('Conect.txt','w')
+	
 	print('Reading pdb file')
 	Atoms = PdbFile(args.indfile)
 	
@@ -552,9 +592,18 @@ def main():
 	
 	print('Adding connections and external bonds')
 	for i in range(nopairs):
-		Atoms.AddConnection(','.join([atoms_1[i],frags_1[i]]), ','.join([atoms_2[i],frags_2[i]]), ForceField)
+		Atoms.AddConnection(','.join([atoms_1[i],frags_1[i]]), ','.join([atoms_2[i],frags_2[i]]), ForceField, toPDB, ConectFile)
 	Atoms.reportConnections()
 	ForceField.AddExternalBonds(Atoms)
+	
+	print('NOTE: The ignoreExternalBond flag may be need to included during system creation.')
+	print(' system = forcefield.createSystem(..., ignoreExternalBonds=True)')
+	print(' Sometimes openMM does not like bonds over periodic boundary conditions.')
+	print(' If so, then a CustomBondForce with setUsesPeriodicBoundaryConditions(True) may be needed.')
+	
+	# Atoms.RemoveLongBonds()
+	
+	ConectFile.close()
 	
 	Atoms.PrintToFile(args.outdfile)
 	ForceField.PrintToFile(args.outffile)
