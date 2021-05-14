@@ -4,7 +4,8 @@
 # into an openMM xml force field file.
 # Ryan Clark <ryan.clark@ens-lyon.fr>
 # Agilio Padua <agilio.padua@ens-lyon.fr>
-# version 2021/05/06
+# version 2021/05/14
+# coding=utf8
 
 import numpy as np
 import argparse
@@ -44,7 +45,9 @@ def dist2atNoWrap(at1,at2):
 
 class PdbFile(object):
 	'''Class object for pdb structure file for openMM'''
-	def __init__(self, datafile):
+	def __init__(self, datafile, ff):
+		residues = ff.root.find('Residues')
+		atoms_ff = ff.root.find('AtomTypes')
 		self.box = ''
 		self.atoms = []
 		self.bonds = []
@@ -67,6 +70,15 @@ class PdbFile(object):
 				atom['y'] = float(line[38:46])
 				atom['z'] = float(line[46:54])
 				atom['ele'] = line[76:78].strip()
+				# uses residues in force field file to assign atom class
+				for residue in residues:
+					if atom['frag'] in residue.get('name')[0:3]:
+						for ffatom in residue.iter('Atom'):
+							if ffatom.get('name') == atom['name']:
+								atom['type'] = ffatom.get('type')
+				for at in atoms_ff:
+					if at.get('name') == atom['type']:
+						atom['class'] = at.get('class')
 				self.atoms.append(atom)
 				line = f.readline()
 			while 'CONECT' in line:
@@ -86,6 +98,7 @@ class PdbFile(object):
 
 	def PrintToFile(self, outfile):
 		'''Print .pdb file of PDB class'''
+		print('Writing PDB file')
 		with open(outfile, 'w') as f:
 			f.write('TITLE     created by ConnectRes\n')
 			f.write('REMARK    includes extra ff parameters and external bonds \n')
@@ -101,7 +114,7 @@ class PdbFile(object):
 				f.write('CONECT{0:5d}{1:5d}\n'.format(bd['i'], bd['j']))
 			f.write('END\n')
 
-	def AddConnection(self, atom1, atom2, ff, toPDB, ConectFile):
+	def AddConnection(self, atom1, atom2, ff, toPDB, BondFile, AngleFile, DihedralFile):
 		'''Add connection between 2 atoms'''
 		atom1_class = atom1.split(',')[0]; atom1_frag = atom1.split(',')[1]
 		atom2_class = atom2.split(',')[0]; atom2_frag = atom2.split(',')[1]
@@ -148,8 +161,99 @@ class PdbFile(object):
 					if toPDB==True:
 						self.bonds.append({'i': atom_1['index'], 'j': atom_2['index']})
 					else:
-						ConectFile.write('{0:5d}\t{1:5d}\n'.format(atom_1['index'],atom_2['index']))
+						BondFile.write('{0:5d}\t{1:5d}\n'.format(atom_1['index'],atom_2['index']))
 					self.newConnections_created.append([atom_1, atom_2])
+					
+		if toPDB == False:
+			print(' Bonds between {0} and {1} added to file {2} '.format(atom_1['class'], atom_2['class'],BondFile.name))
+			
+			angletypes = ff.root.find('HarmonicAngleForce')
+			# Check every angle
+			for ang in angletypes:
+				angAt1 = ang.get('class1'); angAt2 = ang.get('class2'); angAt3 = ang.get('class3')
+				angK = ang.get('k'); angLength = ang.get('angle')
+				# If the angle has atoms which are a part of the bond which has just been added
+				if atom_1['class'] in (angAt1,angAt2,angAt3) and atom_2['class'] in (angAt1,angAt2,angAt3):
+					# Make lists of all of the atoms which match atom1, atom2, atom3 in the angle
+					At1 = []; At2 = []; At3 = []
+					
+					for atom in self.atoms:
+						if atom['class'] == angAt1 and atom['frag'] in (atom1_frag,atom2_frag) and atom['name'][0] != 'D':
+							At1.append(atom)
+						if atom['class'] == angAt2 and atom['frag'] in (atom1_frag,atom2_frag) and atom['name'][0] != 'D':
+							At2.append(atom)
+						if atom['class'] == angAt3 and atom['frag'] in (atom1_frag,atom2_frag) and atom['name'][0] != 'D':
+							At3.append(atom)
+					
+					# if the distance between at1-at2-at3 are small, angle needs to be added, so add it
+					for at1 in At1:
+						for at2 in At2:
+							if dist2at(at1,at2,self.boxDimensions) < 3:
+								for at3 in At3:
+									if dist2at(at2,at3,self.boxDimensions) < 3:
+										AngleFile.write('{0:5d}\t{1:5d}\t{2:5d}\t{3}\t{4}\n'.format(at1['index'],at2['index'],at3['index'],angK,angLength))
+				
+			print(' Angles including atoms {0} and {1} added to file {2} '.format(atom_1['class'],atom_2['class'],AngleFile.name))
+			
+			##TODO: Currently takes all dihedrals on an element type (chemical element) and creates all dihedrals (i.e. Zn, NZ, CX, CZ makes all dihedrals with CX/CZ in column 3 and 4). This means it's putting CX and CZ into the last 2 atom lists in this case. Need to make specific to each atom type/class/name whichever is more appropriate. Can also add something to make sure that atoms are not repeated.
+			
+			# Make list of dihedrals
+			dihedrals = []
+			dihedraltypes = ff.root.find('RBTorsionForce')
+			# Check every dihedral
+			for dih in dihedraltypes:
+				dihAt1 = dih.get('class1'); dihAt2 = dih.get('class2'); dihAt3 = dih.get('class3'); dihAt4 = dih.get('class4')
+				c0 = dih.get('c0');c1 = dih.get('c1');c2 = dih.get('c2');c3 = dih.get('c3');c4 = dih.get('c4');c5 = dih.get('c5')
+				# If the dihedral has atoms which are a part of the bond which has just been added
+				if atom_1['class'] in (dihAt1,dihAt2,dihAt3,dihAt4) and atom_2['class'] in (dihAt1,dihAt2,dihAt3,dihAt4):
+					# Make lists of all of the atoms which match atom1, atom2, atom3, atom4 in the dihedral
+					At1 = []; At2 = []; At3 = []; At4 = []
+					
+					for atom in self.atoms:
+						if atom['class'] == dihAt1 and atom['frag'] in (atom1_frag,atom2_frag) and atom['name'][0] != 'D':
+							At1.append(atom)
+						if atom['class'] == dihAt2 and atom['frag'] in (atom1_frag,atom2_frag) and atom['name'][0] != 'D':
+							At2.append(atom)
+						if atom['class'] == dihAt3 and atom['frag'] in (atom1_frag,atom2_frag) and atom['name'][0] != 'D':
+							At3.append(atom)
+						if atom['class'] == dihAt4 and atom['frag'] in (atom1_frag,atom2_frag) and atom['name'][0] != 'D':
+							At4.append(atom)
+							
+					# if the distance between at1->at2->at3->at4 are small, dihedral needs to be added, so add it
+					for at1 in At1:
+						for at2 in At2:
+							for bond in bondtypes:
+								bondat1 = bond.get('class1'); bondat2 = bond.get('class2')
+								if at1['class'] in [bondat1,bondat2] and at2['class'] in [bondat1,bondat2]:
+									b_l = float(bond.get('length'))*10.
+							if 0.1 < dist2at(at1,at2,self.boxDimensions) < b_l+bondtol:
+								for at3 in At3:
+									for bond in bondtypes:
+										bondat1 = bond.get('class1'); bondat2 = bond.get('class2')
+										if at2['class'] in [bondat1,bondat2] and at3['class'] in [bondat1,bondat2]:
+											b_l = float(bond.get('length'))*10.
+									if 0.1 < dist2at(at2,at3,self.boxDimensions) < b_l+bondtol:	
+										for at4 in At4:
+											for bond in bondtypes:
+												bondat1 = bond.get('class1'); bondat2 = bond.get('class2')
+												if at3['class'] in [bondat1,bondat2] and at4['class'] in [bondat1,bondat2]:
+													b_l = float(bond.get('length'))*10.
+											if 0.1< dist2at(at3,at4,self.boxDimensions) < b_l+bondtol:
+												ats = [at1['index'],at2['index'],at3['index'],at4['index']]
+												if at1['index'] != at3['index'] and at1['index'] != at4['index'] and at2['index'] != at4['index']:
+													#print(at1,at2,at3,at4)
+													ats += [c0,c1,c2,c3,c4,c5]	
+													# if dihedral is not in list, add to list
+													if ats not in dihedrals:
+														dihedrals.append(ats)
+			dihs = []	
+			for d in dihedrals:
+				if d not in dihs:
+					dihs.append(d)
+			for d in dihs:
+				DihedralFile.write('{0:5d}\t{1:5d}\t{2:5d}\t{3:5d}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\n'.format(d[0],d[1],d[2],d[3],d[4],d[5],d[6],d[7],d[8],d[9]))
+				
+			print(' Dihedrals including atoms {0} and {1} added to file {2} '.format(atom_1['class'],atom_2['class'],DihedralFile.name))
 	
 	def reportConnections(self):
 		'''Print output report of connections created for each atom pair'''
@@ -223,6 +327,7 @@ class XmlFile(object):
 
 	def PrintToFile(self, outfile):
 		'''write force field to xml file'''
+		print('Writing XML file')
 		indent_xml(self.root)
 		self.ftree.write(outfile)
 
@@ -549,7 +654,7 @@ def main():
 	parser.add_argument('-f', '--fffile', default = 'frag.ff',
 						help = 'Force field file containing bond, angle and dihedral data to add to .xml file ') 
 	parser.add_argument('-p', '--conectinpdb', action = 'store_true', 
-						help = 'Print connect to pdb file. If not specified, atoms that need connecting are pritned to file "Conect.txt"') 
+						help = 'Print connect to pdb file. NOTE: It is not recommended to do this if the bonds you create cross periodic boundary conditions!! If not specified, bonds, angles and dihedrals that need to be added to your openMM system are printed to files "Bonds.txt", "Angles.txt" and "Dihedrals.txt".') 
 	parser.add_argument('-id', '--indfile', default = 'config.pdb',
 						help = 'input openMM data file (default: config.pdb)')  
 	parser.add_argument('-od', '--outdfile', default = 'config-c.pdb',
@@ -576,34 +681,45 @@ def main():
 	
 	if args.conectinpdb:
 		toPDB = True
+		BondFile = None
+		AngleFile = None
+		DihedralFile = None
 	else:
 		toPDB = False
-		ConectFile = open('Conect.txt','w')
-	
-	print('Reading pdb file')
-	Atoms = PdbFile(args.indfile)
+		BondFile = open('Bonds.txt','w')
+		AngleFile = open('Angles.txt','w')
+		DihedralFile = open('Dihedrals.txt','w')
 	
 	print('Reading force field and extra data files')
 	ForceField = XmlFile(args.inffile)
 	ParametersToAdd = Params(args.fffile)
+	
+	print('Reading pdb file')
+	Atoms = PdbFile(args.indfile, ForceField)
 	
 	print('Adding new parameters to force field file')
 	ForceField.AddParams(ParametersToAdd)
 	
 	print('Adding connections and external bonds')
 	for i in range(nopairs):
-		Atoms.AddConnection(','.join([atoms_1[i],frags_1[i]]), ','.join([atoms_2[i],frags_2[i]]), ForceField, toPDB, ConectFile)
+		Atoms.AddConnection(','.join([atoms_1[i],frags_1[i]]), ','.join([atoms_2[i],frags_2[i]]), ForceField, toPDB, BondFile, AngleFile, DihedralFile)
 	Atoms.reportConnections()
 	ForceField.AddExternalBonds(Atoms)
 	
-	print('NOTE: The ignoreExternalBond flag may be need to included during system creation.')
+	print('\nNOTE: The ignoreExternalBond flag may be need to included during system creation.')
 	print(' system = forcefield.createSystem(..., ignoreExternalBonds=True)')
 	print(' Sometimes openMM does not like bonds over periodic boundary conditions.')
-	print(' If so, then a CustomBondForce with setUsesPeriodicBoundaryConditions(True) may be needed.')
+	print(' If so, then a CustomBondForce with setUsesPeriodicBoundaryConditions(True) may be needed.\n')
 	
-	# Atoms.RemoveLongBonds()
+	#Atoms.RemoveLongBonds()
 	
-	ConectFile.close()
+	if not args.conectinpdb:
+		BondFile.close()
+		AngleFile.close()
+		DihedralFile.close()
+		print('Connections across external bonds not added to PDB file.')
+		print(' Bonds, angles and dihedrals will need to be added manually from files:\n {0}\n {1}\n {2}\n'.format(BondFile.name,AngleFile.name,DihedralFile.name))
+		print('The following is an example loop to add bonds/angles from file to the openMM system after creation\n\nBonds = openmm.HarmonicBondForce()\n\nBonds.setUsesPeriodicBoundaryConditions(True)\nbondsToAdd = "Bonds.txt"\nk = 10000.0*unit.kilojoule/(unit.nanometer**2*unit.mole)\nr0 = 0.15*unit.nanometer\nfor line in open(bondsToAdd,"r"):\n\ttok = line.split()\n\tBonds.addBond(int(tok[0]),int(tok[1]),float(r0),float(k))\nsystem.addForce(Bonds)')
 	
 	Atoms.PrintToFile(args.outdfile)
 	ForceField.PrintToFile(args.outffile)

@@ -1,0 +1,19 @@
+tolerance 2.5
+filetype xyz
+output simbox.xyz
+
+structure ZIF_ordered.xyz
+  number 1
+  fixed 0.0 0.0 0.0 0.0 0.0 0.0
+end structure
+
+structure P66614_pack.xyz
+  number 465
+  inside box 0.0000 0.0000 120.0 50.0 50.0 600.0
+end structure
+
+structure Cl_pack.xyz
+  number 465
+  inside box 0.0000 0.0000 120.0 50.0 50.0 600.0
+end structure
+
