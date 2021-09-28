@@ -62,4 +62,4 @@ Another point is that the Langevin integrators can be considerably faster than N
 
 ### Temperatures
 
-The Drude integrators in OpenMM don't seem to compute the correct temperatures of atoms and Drude particles (relative to cores), showing a temperature lower than the set-point. I suspect this is because of the Drudes, so I've attempted to calculate the temperature of the atoms from their velocities in the python script, but the values are still too low.
+The Drude integrators in OpenMM don't compute the temperatures of atoms and Drude particles (relative to cores) and show a global temperature lower than the set-point. The emperatures corresponding to atoms and Drude particles have to be computed separately by the user (as shown in the omm.py script).
