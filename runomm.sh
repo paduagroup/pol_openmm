@@ -1,8 +1,8 @@
 #!/bin/bash
 #
 #$ -S /bin/bash
-#$ -N romm
-#$ -q r730gpuRTX2080ti
+#$ -N omm
+#$ -q r730gpuRTX2080ti@r730gpu08
 #$ -cwd
 #$ -V
 ##$ -m be
@@ -24,7 +24,7 @@ fi
 echo $SCRATCHDIR
 /bin/mkdir -p $SCRATCHDIR
 
-cp -f *.py field*.xml config*.pdb $SCRATCHDIR/
+cp -f *.py field*.xml config*.pdb last.pdb $SCRATCHDIR/
 
 cd $SCRATCHDIR
 ls -l

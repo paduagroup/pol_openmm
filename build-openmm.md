@@ -12,7 +12,9 @@ The command
 
     nvidia-smi
 
-shows important information on NVIDIA GPU hardware present, but this doesn't work on frontal machines.
+shows important information on NVIDIA GPU hardware present. In computing centers this doesn't work on frontal or submission machines because they don't have GPUs for calculations. You need to ssh into the computing nodes with GPUs to check, for example in the PSMN:
+
+    ssh ssh r730gpu01 nvidia-smi
 
 
 ## Installation on the PSMN
@@ -37,6 +39,11 @@ OpenMM 7.4.2 is compatible with the temperature-grouped Nosé-Hoover thermostat 
 When installed with `conda`, OpenMM 7.5.0 comes compiled with the CUDA 11 toolkit, so it will not be properly configured on the PSMN. The code may run but some functionalities will not work.
 
 Therefore OpenMM should be compiled from source, which is straightforward (instructions below). There is one detail: the latest OpenMM 7.5.0 will produce code with `--arch=sm_75`, which is not supported in CUDA 9.2. It is therefore necessary to modify one file in the source code in order to specify `--arch=sm_70` (which corresponds to the previous generation of architecture named Volta, e.g. the V100 cards).
+
+
+### OpenMM 7.6.0
+
+I haven't tested this yeat, so let me know if you do.
 
 
 ## Installation on IDRIS
