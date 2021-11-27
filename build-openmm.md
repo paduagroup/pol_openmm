@@ -116,7 +116,12 @@ The Jean Zay machine has V100 cards, so the recipe for the PSMN may well work th
 
     so that OpenMM libraries are found.
 
-That's it. These build instructions should also work for OpenMM 7.4.2.
+That's it. These build instructions should also work with OpenMM 7.4.2.
+
+8. Test the installation
+
+        ssh machine-with-GPU
+        python -m openmm.testInstallation
 
 
 ## TGNH Drude thermostat (OpenMM 7.4.2)
