@@ -4,7 +4,7 @@ import sys
 import datetime
 import numpy as np
 
-from simtk import openmm
+import openmm
 from simtk import unit
 from simtk.openmm import app
 

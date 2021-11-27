@@ -14,7 +14,7 @@ The command
 
 shows important information on NVIDIA GPU hardware present. In computing centers this doesn't work on frontal or submission machines because they don't have GPUs for calculations. You need to ssh into the computing nodes with GPUs to check, for example in the PSMN:
 
-    ssh ssh r730gpu01 nvidia-smi
+    ssh r730gpu01 nvidia-smi
 
 
 ## Installation on the PSMN
@@ -34,16 +34,15 @@ OpenMM 7.4.2 can be installed using `conda`, choosing a version compiled with CU
 OpenMM 7.4.2 is compatible with the temperature-grouped Nosé-Hoover thermostat (http://doi.org/10.1021/acs.jpclett.9b02983), which is the best one for Drude polarizable force fields. Unfortunately, OpenMM 7.4.2 doesn't seem to run well with `xml` input files of the latest polarizable force fields, including ours.
 
 
-### OpenMM 7.5.0
-
-When installed with `conda`, OpenMM 7.5.0 comes compiled with the CUDA 11 toolkit, so it will not be properly configured on the PSMN. The code may run but some functionalities will not work.
-
-Therefore OpenMM should be compiled from source, which is straightforward (instructions below). There is one detail: the latest OpenMM 7.5.0 will produce code with `--arch=sm_75`, which is not supported in CUDA 9.2. It is therefore necessary to modify one file in the source code in order to specify `--arch=sm_70` (which corresponds to the previous generation of architecture named Volta, e.g. the V100 cards).
-
-
 ### OpenMM 7.6.0
 
-I haven't tested this yeat, so let me know if you do.
+When installed with `conda`, OpenMM 7.6.0 comes compiled with the CUDA 11 toolkit, so it will not be properly configured for the PSMN. It may run but some functionalities will not work. OpenMM is distributed in versions compatible with older CUDA toolkits:
+
+    conda install -c conda-forge openmm cudatoolkit=9.2
+
+This would be the simplest way to install OpenMM.
+
+For more control, OpenMM can be compiled from source, which should be straightforward (instructions below). There is one detail: the latest OpenMM versions may produce code with `--arch=sm_75` or later, which is not supported in CUDA 9.2. It is therefore necessary to modify one file in the source code in order to specify `--arch=sm_70` (which corresponds to the previous generation of architecture named Volta, e.g. the V100 cards).
 
 
 ## Installation on IDRIS
@@ -51,17 +50,19 @@ I haven't tested this yeat, so let me know if you do.
 The Jean Zay machine has V100 cards, so the recipe for the PSMN may well work there. I don't know what CUDA version they have.
 
 
-## Compilation of OpenMM
+## Compilation of OpenMM on the PSMN
 
 1. Install `miniconda3`, with `numpy` and not much else, since the PSMN machines already have most of the tools needed by OpenMM (`SWIG`, `Doxygen`, etc.) This will provide a local python installation for OpenMM. Activate `conda` if not by default:
 
         conda activate
 
-2. Download the OpenMM source code from https://github.com/openmm/openmm/releases/tag/7.5.0 and expand into a `src` dir; create a `build` dir.
+    The version of `cmake` on the PSMN is too old for OpenMM 7.6, so install `cmake` also under `conda`.
+
+2. Download the OpenMM source code from https://github.com/openmm/openmm/releases/tag/7.6.0 and expand into a `src` dir; create a `build` dir.
 
         mkdir ~/src
         cd ~/src
-        tar xzvf openmm-7.5.0.tar.gz
+        tar xzvf openmm-7.6.0.tar.gz
         mkdir build_openmm
         cd build_openmm
 
@@ -69,17 +70,16 @@ The Jean Zay machine has V100 cards, so the recipe for the PSMN may well work th
 
     In the `build_openmm` dir do:
 
-        ccmake ../openmm-7.5.0
+        ccmake ../openmm-7.6.0
 
     press `'c'` to configure. Set the installation dir (replacing `user`) and CUDA compiler, also check that your local `python` was found (if not go back to 1.):
 
         CMAKE_INSTALL_PREFIX=/home/user/openmm
-        CUDA_HOST_COMPILER=/usr/local/cuda/bin/nvcc
         PYTHON_EXECUTABLE=/home/user/miniconda3/bin/python
 
     then press `'c'` and `'g'` to generate the build files.
 
-4. Patch the source code to use `sm_70`. Edit the file `openmm-7.5.0/platforms/cuda/src/CudaContext.cpp` and add the two lines `major = 7;`, `minor = 0;` around line 227. Don't forget the end-of-line `';'` this is C++.
+4. Patch the source code to use `sm_70`. Edit the file `openmm-7.6.0/platforms/cuda/src/CudaContext.cpp` and add the two lines `major = 7;`, `minor = 0;` around line 227. Don't forget the end-of-line `';'` this is C++.
 
         if (cudaDriverVersion < 8000) {
             // This is a workaround to support Pascal with CUDA 7.5.  It reports
@@ -92,7 +92,7 @@ The Jean Zay machine has V100 cards, so the recipe for the PSMN may well work th
         }
         major = 7;
         minor = 0;
-        gpuArchitecture = intToString(major)+intToString(minor);
+        gpuArchitecture = 10*major+minor;
         computeCapability = major+0.1*minor;
 
     Alternatively, you can apply the patch I created,
@@ -108,7 +108,7 @@ The Jean Zay machine has V100 cards, so the recipe for the PSMN may well work th
 
 6. Test the installation (it's not going to find a CUDA device on the frontal machine),
 
-        python -m simtk.testInstallation
+        python -m openmm.testInstallation
 
 7. In your submission script (to `qsub`) you should add:
 
@@ -116,7 +116,7 @@ The Jean Zay machine has V100 cards, so the recipe for the PSMN may well work th
 
     so that OpenMM libraries are found.
 
-That's it. This build should also work for OpenMM 7.4.2.
+That's it. These build instructions should also work for OpenMM 7.4.2.
 
 
 ## TGNH Drude thermostat (OpenMM 7.4.2)
@@ -134,7 +134,6 @@ The temperature-grouped Nosé-Hoover thermostat (http://doi.org/10.1021/acs.jpcl
     Set the following (change `user`):
 
         CMAKE_INSTALL_PREFIX=/home/user/openmm
-        CUDA_HOST_COMPILER=/usr/local/cuda/bin/nvcc
         DRUDENOSE_BUILD_OPENCL_LIB=OFF
         OPENMM_DIR=/home/user/openmm
         PYTHON_EXECUTABLE=/home/user/miniconda3/bin/python
@@ -148,5 +147,4 @@ The temperature-grouped Nosé-Hoover thermostat (http://doi.org/10.1021/acs.jpcl
         make PythonInstall
 
 Done.
-
 
