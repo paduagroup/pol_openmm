@@ -17,13 +17,7 @@ shows important information on NVIDIA GPU hardware present. In computing centers
     ssh r730gpu01 nvidia-smi
 
 
-## Installation on the PSMN
-
-The PSMN has 40 NVIDIA RTX 2080Ti GPUs, which are fast in single and mixed precision. Mixed precision is a great choice for MD.
-
-The 2080 cards are of Turing architecture, ideally used with the CUDA 10 (or later) toolkit of drivers and compilers. The optimum compilation flag for these cards is `--arch=sm_75`.
-
-The PSMN machines have CUDA 9.2 and an upgrade seems unlikely. 
+## Installation
 
 ### OpenMM 7.4.2
 
@@ -40,14 +34,29 @@ When installed with `conda`, OpenMM 7.6.0 comes compiled with the CUDA 11 toolki
 
     conda install -c conda-forge openmm cudatoolkit=9.2
 
-This would be the simplest way to install OpenMM.
+This would be the simplest and recommended way to install OpenMM.
 
-For more control, OpenMM can be compiled from source, which should be straightforward (instructions below). There is one detail: the latest OpenMM versions may produce code with `--arch=sm_75` or later, which is not supported in CUDA 9.2. It is therefore necessary to modify one file in the source code in order to specify `--arch=sm_70` (which corresponds to the previous generation of architecture named Volta, e.g. the V100 cards).
+For more control, OpenMM can be compiled from source, which should be straightforward (instructions below).
+
+
+### Test the installation
+
+        ssh machine-with-GPU
+        python -m openmm.testInstallation
 
 
 ## Installation on IDRIS
 
 The Jean Zay machine has V100 cards, so the recipe for the PSMN may well work there. I don't know what CUDA version they have.
+
+
+## Installation on the PSMN
+
+The PSMN has 40 NVIDIA RTX 2080Ti GPUs, which are fast in single and mixed precision. Mixed precision is a great choice for MD.
+
+The 2080 cards are of Turing architecture, ideally used with the CUDA 10 (or later) toolkit of drivers and compilers. The optimum compilation flag for these cards is `--arch=sm_75`.
+
+The PSMN machines have CUDA 9.2 and an upgrade seems unlikely. The latest OpenMM versions may produce code with `--arch=sm_75` or later, which is not supported in CUDA 9.2 (this was true for OpenMM 7.5.0; it is possible that a binary installation works fine for OpenMM 7.6). It is therefore necessary to modify one file in the source code in order to specify `--arch=sm_70` (which corresponds to the previous generation of architecture named Volta, e.g. the V100 cards).
 
 
 ## Compilation of OpenMM on the PSMN
@@ -116,12 +125,7 @@ The Jean Zay machine has V100 cards, so the recipe for the PSMN may well work th
 
     so that OpenMM libraries are found.
 
-That's it. These build instructions should also work with OpenMM 7.4.2.
-
-8. Test the installation
-
-        ssh machine-with-GPU
-        python -m openmm.testInstallation
+That's it. You can test the installation as indicated above.These build instructions should also work with OpenMM 7.4.2.
 
 
 ## TGNH Drude thermostat (OpenMM 7.4.2)
