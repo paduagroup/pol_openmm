@@ -30,13 +30,13 @@ OpenMM 7.4.2 is compatible with the temperature-grouped Nosé-Hoover thermostat 
 
 ### OpenMM 7.6.0
 
-When installed with `conda`, OpenMM 7.6.0 comes compiled with the CUDA 11 toolkit, so it will not be properly configured for the PSMN. It may run but some functionalities will not work. OpenMM is distributed in versions compatible with older CUDA toolkits:
+When installed with `conda`, OpenMM 7.6.0 comes compiled with the CUDA 11 toolkit  (so it may not be properly configured for all hardware setups, namely the one on the PSMN). The code may run but some functionalities will not work. Luckily, OpenMM is distributed in versions compatible with older versions of CUDA:
 
     conda install -c conda-forge openmm cudatoolkit=9.2
 
 This would be the simplest and recommended way to install OpenMM.
 
-For more control, OpenMM can be compiled from source, which should be straightforward (instructions below).
+For more control, OpenMM can be compiled from source (instructions below).
 
 
 ### Test the installation
@@ -57,6 +57,8 @@ The PSMN has 40 NVIDIA RTX 2080Ti GPUs, which are fast in single and mixed preci
 The 2080 cards are of Turing architecture, ideally used with the CUDA 10 (or later) toolkit of drivers and compilers. The optimum compilation flag for these cards is `--arch=sm_75`.
 
 The PSMN machines have CUDA 9.2 and an upgrade seems unlikely. The latest OpenMM versions may produce code with `--arch=sm_75` or later, which is not supported in CUDA 9.2 (this was true for OpenMM 7.5.0; it is possible that a binary installation works fine for OpenMM 7.6). It is therefore necessary to modify one file in the source code in order to specify `--arch=sm_70` (which corresponds to the previous generation of architecture named Volta, e.g. the V100 cards).
+
+Maybe try first to install in `conda` the version for CUDA 9.2. If that doesn't work, then compile from source.
 
 
 ## Compilation of OpenMM on the PSMN
