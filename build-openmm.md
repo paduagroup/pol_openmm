@@ -19,6 +19,16 @@ shows important information on NVIDIA GPU hardware present. In computing centers
 
 ## Installation
 
+### OpenMM 7.6.0
+
+When installed with `conda`, OpenMM 7.6.0 comes compiled with the CUDA 11 toolkit  (so it may not be properly configured for all hardware setups, namely the one on the PSMN). The code may run but some functionalities will not work with older GPUs or drivers. Luckily, OpenMM is distributed in versions compatible with older versions of CUDA:
+
+    conda install -c conda-forge openmm cudatoolkit=9.2
+
+This would be the simplest and recommended way to install OpenMM.
+
+For more control, OpenMM can be compiled from source (instructions below).
+
 ### OpenMM 7.4.2
 
 OpenMM 7.4.2 can be installed using `conda`, choosing a version compiled with CUDA 9.2, from https://anaconda.org/omnia/openmm
@@ -28,20 +38,9 @@ OpenMM 7.4.2 can be installed using `conda`, choosing a version compiled with CU
 OpenMM 7.4.2 is compatible with the temperature-grouped Nosé-Hoover thermostat (http://doi.org/10.1021/acs.jpclett.9b02983), which is the best one for Drude polarizable force fields. Unfortunately, OpenMM 7.4.2 doesn't seem to run well with `xml` input files of the latest polarizable force fields, including ours.
 
 
-### OpenMM 7.6.0
-
-When installed with `conda`, OpenMM 7.6.0 comes compiled with the CUDA 11 toolkit  (so it may not be properly configured for all hardware setups, namely the one on the PSMN). The code may run but some functionalities will not work. Luckily, OpenMM is distributed in versions compatible with older versions of CUDA:
-
-    conda install -c conda-forge openmm cudatoolkit=9.2
-
-This would be the simplest and recommended way to install OpenMM.
-
-For more control, OpenMM can be compiled from source (instructions below).
-
-
 ### Test the installation
 
-        ssh machine-with-GPU
+        ssh <machine-with-GPU>
         python -m openmm.testInstallation
 
 
@@ -58,7 +57,7 @@ The 2080 cards are of Turing architecture, ideally used with the CUDA 10 (or lat
 
 The PSMN machines have CUDA 9.2 and an upgrade seems unlikely. The latest OpenMM versions may produce code with `--arch=sm_75` or later, which is not supported in CUDA 9.2 (this was true for OpenMM 7.5.0; it is possible that a binary installation works fine for OpenMM 7.6). It is therefore necessary to modify one file in the source code in order to specify `--arch=sm_70` (which corresponds to the previous generation of architecture named Volta, e.g. the V100 cards).
 
-Maybe try first to install in `conda` the version for CUDA 9.2. If that doesn't work, then compile from source.
+Maybe try first to install using `conda` the version for CUDA 9.2. If that doesn't work, then you'll need to compile from source.
 
 
 ## Compilation of OpenMM on the PSMN
@@ -85,8 +84,8 @@ Maybe try first to install in `conda` the version for CUDA 9.2. If that doesn't 
 
     press `'c'` to configure. Set the installation dir (replacing `user`) and CUDA compiler, also check that your local `python` was found (if not go back to 1.):
 
-        CMAKE_INSTALL_PREFIX=/home/user/openmm
-        PYTHON_EXECUTABLE=/home/user/miniconda3/bin/python
+        CMAKE_INSTALL_PREFIX=/home/<user>/openmm
+        PYTHON_EXECUTABLE=/home/<user>/miniconda3/bin/python
 
     then press `'c'` and `'g'` to generate the build files.
 
@@ -117,22 +116,22 @@ Maybe try first to install in `conda` the version for CUDA 9.2. If that doesn't 
         make install
         make PythonInstall
 
-6. Test the installation (it's not going to find a CUDA device on the frontal machine),
+6. Test the installation (it won't find a CUDA device on the frontal machine),
 
         python -m openmm.testInstallation
 
-7. In your submission script (to `qsub`) you should add:
+7. In your submission script (to `qsub`) you may need to add
 
         export LD_LIBRARY_PATH=$HOME/openmm/lib
 
     so that OpenMM libraries are found.
 
-That's it. You can test the installation as indicated above.These build instructions should also work with OpenMM 7.4.2.
+That's it. You can test the installation as indicated above. These build instructions should also work with OpenMM 7.4.2.
 
 
 ## TGNH Drude thermostat (OpenMM 7.4.2)
 
-The temperature-grouped Nosé-Hoover thermostat (http://doi.org/10.1021/acs.jpclett.9b02983) is a plugin to OpenMM 7.4.2. The authors are in the process of upgrading it to the latest OpenMM 7.5 but gave no estimated date.
+The temperature-grouped Nosé-Hoover thermostat (http://doi.org/10.1021/acs.jpclett.9b02983) is a plugin to OpenMM 7.4.2. The authors are in the process of upgrading it to the latest OpenMM but gave no estimated date.
 
 1. Download or `git clone` the plugin from https://github.com/scychon/openmm_drudeNose
 
