@@ -66,13 +66,13 @@ Maybe try first to install using `conda` the version for CUDA 9.2. If that doesn
 
         conda activate
 
-    The version of `cmake` on the PSMN is too old for OpenMM 7.6, so install `cmake` also under `conda`.
+    The version of `cmake` on the PSMN is too old for OpenMM 7.7, so install `cmake` also under `conda`.
 
-2. Download the OpenMM source code from https://github.com/openmm/openmm/releases/tag/7.6.0 and expand into a `src` dir; create a `build` dir.
+2. Download the OpenMM source code from https://github.com/openmm/openmm/releases/tag/7.7.0 and expand into a `src` dir; create a `build` dir.
 
         mkdir ~/src
         cd ~/src
-        tar xzvf openmm-7.6.0.tar.gz
+        tar xzvf openmm-7.7.0.tar.gz
         mkdir build_openmm
         cd build_openmm
 
@@ -80,7 +80,7 @@ Maybe try first to install using `conda` the version for CUDA 9.2. If that doesn
 
     In the `build_openmm` dir do:
 
-        ccmake ../openmm-7.6.0
+        ccmake ../openmm-7.7.0
 
     press `'c'` to configure. Set the installation dir (replacing `user`) and CUDA compiler, also check that your local `python` was found (if not go back to 1.):
 
