@@ -87,7 +87,7 @@ Maybe try first to install using `conda` the version for CUDA 9.2. If that doesn
         CMAKE_INSTALL_PREFIX=/home/<user>/openmm
         PYTHON_EXECUTABLE=/home/<user>/miniconda3/bin/python
 
-    then press `'c'` and `'g'` to generate the build files.
+    then press `'g'` to generate the build files.
 
 4. Patch the source code to use `sm_70`. Edit the file `openmm-7.6.0/platforms/cuda/src/CudaContext.cpp` and add the two lines `major = 7;`, `minor = 0;` around line 227. Don't forget the end-of-line `';'` this is C++.
 
