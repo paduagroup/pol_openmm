@@ -19,13 +19,15 @@ shows important information on NVIDIA GPU hardware present. In computing centers
 
 ## Installation
 
-### OpenMM 7.6.0
+### OpenMM 7.7.0
 
-When installed with `conda`, OpenMM 7.6.0 comes compiled with the CUDA 11 toolkit  (so it may not be properly configured for all hardware setups, namely the one on the PSMN). The code may run but some functionalities will not work with older GPUs or drivers. Luckily, OpenMM is distributed in versions compatible with older versions of CUDA:
+The easiest and recommended way to install OpenMM is using the `conda` package manager. For that, install `Anaconda` or `Miniconda` in your user accound. Then
+
+    conda install -c conda-forge openmm
+
+When installed with `conda`, OpenMM 7.7.0 comes compiled with the CUDA 11 toolkit  (so it may not be properly configured for all hardware setups, namely the one on the PSMN). The code may run but some functionalities will not work with older GPUs or drivers. It is possible that OpenMM is distributed with older versions of CUDA, for example:
 
     conda install -c conda-forge openmm cudatoolkit=9.2
-
-This would be the simplest and recommended way to install OpenMM.
 
 For more control, OpenMM can be compiled from source (instructions below).
 
