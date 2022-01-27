@@ -31,8 +31,7 @@
 
 4. Use `field-p-sc.xml` and `config-p.pdb` to run OpenMM. Since Drude particles are already present in the `pdb` file, no need to have OpenMM add the Drude particles with
 
-        modeller.addExtraPart
-        icles(forcefield)
+        modeller.addExtraParticles(forcefield)
 
     It should also be possible to use the initial `config.pdb` and have OpenMM add the Drude particles.
 
@@ -53,13 +52,13 @@ Within each `residue` the atom `name` is composed of the chemical element plus a
 
 Although the TGNH thermostat is certainly superior, I couldn't make it work with our `xml` force field files, which run fine in the latest OpenMM 7.5. There may be bugs or incomplete implementations in OpenMM 7.4.2.
 
-The authors of the TGNH are updating it to OpenMM 7.5, but gave no date. I think it is probably not worth the effort to reverse engineer the force field formats that would make our systems run with TGNH in OpenMM 7.4.2.
+The authors of the TGNH are updating it to a more recent version of OpenMM, but gave no date. I think that reverse engineering the force field formats for our systems to run with TGNH in OpenMM 7.4.2 is not worth the effort.
 
-As a result, I would favour using the standard Drude dual thermostats that come with OpenMM 7.5. Maybe these are not the very best but they should be fine for most equilibrium quantities. Anyway, this is what almost everyone else is using.
+As a result, I would favour using the standard Drude dual thermostats that come with OpenMM 7.5-7.7. Maybe these are not the very best but they should be fine for equilibrium quantities (but not ideal for diffusion). Anyway, this is what almost everyone else is using.
 
-Another point is that the Langevin integrators can be considerably faster than Nosé-Hoover, also in their Drude versions. The Langevin are stochastic and not good for transport properties, but probably ok for equilibrium quantities.
+Another point is that the Langevin integrators can be considerably faster than Nosé-Hoover, also in their Drude versions. The Langevin are stochastic and not good for transport properties, but shoudl be ok for equilibrium quantities.
 
 
 ### Temperatures
 
-The Drude integrators in OpenMM don't compute the temperatures of atoms and Drude particles (relative to cores) and show a global temperature lower than the set-point. The emperatures corresponding to atoms and Drude particles have to be computed separately by the user (as shown in the omm.py script).
+The Drude integrators in OpenMM don't compute the temperatures of atoms and Drude particles (relative to cores) and show a global temperature that is lower than the set point. The temperatures corresponding to atoms and Drude particles have to be computed separately by the user (as shown in the omm.py script).
