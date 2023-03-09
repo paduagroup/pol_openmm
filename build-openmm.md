@@ -1,6 +1,35 @@
 # OpenMM Installation Instructions
 
 
+## Installation using conda
+
+The easiest and recommended way to install OpenMM is using the `conda` package manager. For that, install `Miniconda` in your user account.
+
+Append channel `conda-forge` to your list of channels:
+
+    conda config --append channels conda-forge
+
+It is recommended to use separate environments for large packages that have many dependencies:
+
+    conda create --name omm
+    conda activate omm
+
+ Then install OpenMM
+
+    conda install openmm
+
+Check that `cudatoolkit` has been installed too if you have access to NVIDIA GPUs.
+
+Eventually install also accessory packages, for example `openmm-plumed`.
+
+## Test the installation
+
+    python -m openmm.testInstallation
+
+# Installing from source
+
+For more control OpenMM can be compiled from source (instructions below).
+
 ## Finding the version of the CUDA toolkit
 
 GPU computing is a quickly evolving field and navigating among all the versions of cards, their drivers and compilers is essential. Locate the root of the CUDA installation and the CUDA compiler `nvcc`:
@@ -12,57 +41,10 @@ The command
 
     nvidia-smi
 
-shows important information on NVIDIA GPU hardware present. In computing centers this doesn't work on frontal or submission machines because they don't have GPUs for calculations. You need to ssh into the computing nodes with GPUs to check, for example in the PSMN:
-
-    ssh r730gpu01 nvidia-smi
+shows important information on NVIDIA GPU hardware present. In computing centers this doesn't work on frontal or submission machines because they don't have GPUs for calculations. You need to find this information otherwise or, if possible, ssh into the computing nodes with GPUs to check.
 
 
-## Installation
-
-### OpenMM 7.7.0
-
-The easiest and recommended way to install OpenMM is using the `conda` package manager. For that, install `Anaconda` or `Miniconda` in your user accound. Then
-
-    conda install -c conda-forge openmm
-
-When installed with `conda`, OpenMM 7.7.0 comes compiled with the CUDA 11 toolkit  (so it may not be properly configured for all hardware setups, namely the one on the PSMN). The code may run but some functionalities will not work with older GPUs or drivers. It is possible that OpenMM is distributed with older versions of CUDA, for example:
-
-    conda install -c conda-forge openmm cudatoolkit=9.2
-
-For more control, OpenMM can be compiled from source (instructions below).
-
-### OpenMM 7.4.2
-
-OpenMM 7.4.2 can be installed using `conda`, choosing a version compiled with CUDA 9.2, from https://anaconda.org/omnia/openmm
-
-    conda install -c omnia/label/cuda92 openmm
-
-OpenMM 7.4.2 is compatible with the temperature-grouped Nosé-Hoover thermostat (http://doi.org/10.1021/acs.jpclett.9b02983), which is the best one for Drude polarizable force fields. Unfortunately, OpenMM 7.4.2 doesn't seem to run well with `xml` input files of the latest polarizable force fields, including ours.
-
-
-### Test the installation
-
-        ssh <machine-with-GPU>
-        python -m openmm.testInstallation
-
-
-## Installation on IDRIS
-
-The Jean Zay machine has V100 cards, so the recipe for the PSMN may well work there. I don't know what CUDA version they have.
-
-
-## Installation on the PSMN
-
-The PSMN has 40 NVIDIA RTX 2080Ti GPUs, which are fast in single and mixed precision. Mixed precision is a great choice for MD.
-
-The 2080 cards are of Turing architecture, ideally used with the CUDA 10 (or later) toolkit of drivers and compilers. The optimum compilation flag for these cards is `--arch=sm_75`.
-
-The PSMN machines have CUDA 9.2 and an upgrade seems unlikely. The latest OpenMM versions may produce code with `--arch=sm_75` or later, which is not supported in CUDA 9.2 (this was true for OpenMM 7.5.0; it is possible that a binary installation works fine for OpenMM 7.6). It is therefore necessary to modify one file in the source code in order to specify `--arch=sm_70` (which corresponds to the previous generation of architecture named Volta, e.g. the V100 cards).
-
-Maybe try first to install using `conda` the version for CUDA 9.2. If that doesn't work, then you'll need to compile from source.
-
-
-## Compilation of OpenMM on the PSMN
+## Compilation of OpenMM on the PSMN computing center
 
 1. Install `miniconda3`, with `numpy` and not much else, since the PSMN machines already have most of the tools needed by OpenMM (`SWIG`, `Doxygen`, etc.) This will provide a local python installation for OpenMM. Activate `conda` if not by default:
 
@@ -91,7 +73,7 @@ Maybe try first to install using `conda` the version for CUDA 9.2. If that doesn
 
     then press `'g'` to generate the build files.
 
-4. Patch the source code to use `sm_70`. Edit the file `openmm-7.6.0/platforms/cuda/src/CudaContext.cpp` and add the two lines `major = 7;`, `minor = 0;` around line 227. Don't forget the end-of-line `';'` this is C++.
+4. (This is outdated since end of 2022) Patch the source code to use `sm_70`. Edit the file `openmm-7.6.0/platforms/cuda/src/CudaContext.cpp` and add the two lines `major = 7;`, `minor = 0;` around line 227. Don't forget the end-of-line `';'` this is C++.
 
         if (cudaDriverVersion < 8000) {
             // This is a workaround to support Pascal with CUDA 7.5.  It reports
