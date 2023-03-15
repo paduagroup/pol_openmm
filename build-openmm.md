@@ -5,6 +5,9 @@
 
 The easiest and recommended way to install OpenMM is using the `conda` package manager. For that, install `Miniconda` in your user account.
 
+    wget https://repo.anaconda.com/miniconda/Miniconda3-*.sh
+    bash Miniconda3-*.sh
+
 Append channel `conda-forge` to the list of channels:
 
     conda config --append channels conda-forge
@@ -18,20 +21,31 @@ Separate environments are recommended for large packages that have many dependen
 
     conda install openmm
 
-Check that `cudatoolkit` has been installed too if you have access to NVIDIA GPUs.
-
-Eventually install also accessory packages, for example `mdtraj`, `openmm-plumed`.
-
-It may be necessary to request specific versions of certain packages for compatibility. 
-
 
 ## Test the installation
 
     python -m openmm.testInstallation
 
+Check that `cudatoolkit` has been installed too if you have access to NVIDIA GPUs.
+
+
+## Accessory packages and tools
+
+You may want to install accessory packages, for example `mdtraj`, `openmm-plumed`.
+
+It may be necessary to request specific versions python or of other dependencies for compatibility.  You can find that out:
+
+    conda search <package> --info
+
+In that case reinstall python and then install the packages.
+
+    conda install python=3.9
+
+
+
 # Installing from source
 
-For more control OpenMM can be compiled from source (instructions below).
+This is a more complex procedure but can give more control on versions of libraries or other dependencies. Not justified unless it is impossible to install OpenMM out-of-the-box via `conda`.
 
 ## Finding the version of the CUDA toolkit
 

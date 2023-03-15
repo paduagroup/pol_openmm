@@ -14,7 +14,7 @@
 
         polxml
 
-    This  creates files `field-p.xml` and `config-p.pdb` with Drude particles added after each core and the necessary force field terms. These files should run with OpenMM 7.5.
+    This  creates files `field-p.xml` and `config-p.pdb` with Drude particles added after each core and the necessary force field terms. These files should run with OpenMM.
 
 3. Scale the LJ potentials, for which fragment molecular files are required (in this example the additional `meoh.zmat` for the fragments of ethyleneglycol). A `fragment.inp` file specifying which atoms belong to which fragments needs to be prepared. The identification is by atom name:
 
@@ -29,19 +29,14 @@
 
     will generate `field-p-sc.xml`
 
-4. Use `field-p-sc.xml` and `config-p.pdb` to run OpenMM. Since Drude particles are already present in the `pdb` file, no need to have OpenMM add the Drude particles with
-
-        modeller.addExtraParticles(forcefield)
-
-    It should also be possible to use the initial `config.pdb` and have OpenMM add the Drude particles.
+4. Use `field-p-sc.xml` and `config-p.pdb` to run OpenMM. Since Drude particles are already present in the `pdb` file, it is not necessary for the script to add the Drude particles, although it should also be possible to use the initial `config.pdb` and have OpenMM add the Drude particles with `modeller.addExtraParticles(forcefield)`.
 
 
 ## Interesting points
 
-
 ### Unique atom names and types
 
-The `polxml` script creates unique atom names (called `type` in the `xml` force field) and bonded types (`class` in the `xml` format) for the whole system because OpenMM assigns the Drude particles to their cores by looking for a specific atom `type`. Although the bonded part of the force field can be spoecified by atom `class`, which is compact, the unique atom names give rise to a huge number of pair interactions, so the non-bonded section of the `xml` file is long.
+The `polxml` script creates unique atom names (called `type` in the `xml` force field) and bonded types (`class` in the `xml` format) for the whole system because OpenMM assigns the Drude particles to their cores by looking for a specific atom `type`. Although the bonded part of the force field can be specified by atom `class`, which is compact, the unique atom names give rise to a huge number of pair interactions, so the non-bonded section of the `xml` file is long.
 
 The unique atom `type` and `class` are composed from 3 characters from the molecule (`residue`) name, plus the atom name, plus a serial number. Drude particles get a preceding `D`.
 
@@ -50,13 +45,13 @@ Within each `residue` the atom `name` is composed of the chemical element plus a
 
 ### Choice of Drude thermostat (and OpenMM version) 
 
-Although the TGNH thermostat is certainly superior, I couldn't make it work with our `xml` force field files, which run fine in the latest OpenMM 7.5. There may be bugs or incomplete implementations in OpenMM 7.4.2.
+Although the TGNH thermostat is certainly superior, I couldn't make it work with our `xml` force field files, which run fine in the latest OpenMM versions. There may be bugs or incomplete implementations in OpenMM 7.4.2.
 
 The authors of the TGNH are updating it to a more recent version of OpenMM, but gave no date. I think that reverse engineering the force field formats for our systems to run with TGNH in OpenMM 7.4.2 is not worth the effort.
 
-As a result, I would favour using the standard Drude dual thermostats that come with OpenMM 7.5-7.7. Maybe these are not the very best but they should be fine for equilibrium quantities (but not ideal for diffusion). Anyway, this is what almost everyone else is using.
+As a result, I would favour using the standard Drude dual thermostats that come with vanilla OpenMM. Maybe these are not the very best but they should be fine for equilibrium quantities (but not ideal for diffusion). Anyway, this is what almost everyone else is using.
 
-Another point is that the Langevin integrators can be considerably faster than Nosé-Hoover, also in their Drude versions. The Langevin are stochastic and not good for transport properties, but shoudl be ok for equilibrium quantities.
+Another point is that the Langevin integrators can be considerably faster than Nosé-Hoover, also in their Drude versions. The Langevin are stochastic and not good for transport properties, but should be ok for equilibrium quantities.
 
 
 ### Temperatures
