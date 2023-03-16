@@ -2,7 +2,7 @@
 # scaleLJ.py - scale epsilon and sigma LJ parameters in pair.lmp LAMMPS file.
 # Agilio Padua <agilio.padua@ens-lyon.fr>
 # Kateryna Goloviznina <kateryna.goloviznina@ens-lyon.fr>
-# version 2021/04/10
+# version 2023/03/16
 
 import sys
 import argparse
@@ -41,7 +41,7 @@ Format of file containing monomers and dimers specification (fragment.ff)
 * k_sapt is the scaling factor for the epsilon of LJ potential, 
 obtained by SAPT quantum calculation (optional).
 ------------------------------------------------------------------------------
-Format of file containing fragments list with atomic names (fragment.inp)
+Format of file containing fragments list with atomic names (frag.inp)
   #name  atoms
   c2c1im   NA CR CW C1 HCR C1A HCW H1
   c4h10    C2 CS HC CT
@@ -49,7 +49,7 @@ Format of file containing fragments list with atomic names (fragment.inp)
   ...
 * atomic names associated with this fragment in field-p.lmp file. 
 ------------------------------------------------------------------------------
-Script requires structure files of monomers used in fragment.inp file 
+Script requires structure files of monomers used in frag.inp file 
 (.zmat, .xyz, .mol, .pdb)
 ==============================================================================
 """
@@ -306,7 +306,7 @@ class FragmentFField(object):
             res+='\n'+str(d)
         return res    
 
-# fragment in fragment.inp; fragment is based on monomer with index range in currect system added        
+# fragment in frag.inp; fragment is based on monomer with index range in current system added        
 class Fragment(Monomer):
     def __init__(self, m, ind_range, res):
         self.name = m.name
@@ -526,14 +526,14 @@ class Polarisation(object):
             res += '\n' + str(at)
         return res
 
-# system that consist of fragments from fragment.inp 
+# system that consist of fragments from frag.inp 
 class System(object):
     def __init__(self, filename):
         self.fragments = []
         self.fragmentpairs = []
         self.filename = filename
     
-    # read fragments from fragment.inp    
+    # read fragments from frag.inp    
     def GetFragments(self, ff, p):
         try:
             with open(self.filename, 'r') as f:
@@ -593,7 +593,7 @@ class System(object):
             for i in scsig:
                 fi = next((x for x in self.fragments if (x.name == i)), None)
                 if (fi is None):
-                    raise Exception('  error: fragment {0} specified with -s option not found in fragment.inp '.format(i))
+                    raise Exception('  error: fragment {0} specified with -s option not found in frag.inp '.format(i))
                 elif fi.pol_model:
                     raise Exception('  error: fragment {0} specified with -s option is already polarisable: sigma should not be scaled'.format(i))
                 else:
@@ -683,7 +683,7 @@ def main():
     parser = argparse.ArgumentParser(description = usage, formatter_class = argparse.RawTextHelpFormatter)
     parser.add_argument('-f', '--ff_filename', type=str, default = 'fragment.ff', help = 'fragment force field (default: fragment.ff)')
     parser.add_argument('-a', '--alpha_filename', type=str, default = 'alpha.ff', help = 'polarisability values file (default: alpha.ff)')
-    parser.add_argument('-i', '--input_filename', type=str, default = 'fragment.inp', help = 'fragment input file with atomic indices (default: fragment.inp)')
+    parser.add_argument('-i', '--input_filename', type=str, default = 'frag.inp', help = 'fragment input file with atomic indices (default: frag.inp)')
     parser.add_argument('-ix', '--inxml', default = 'field-p.xml', help = 'input OpenMM xml file (default: field-p.xml)')
     parser.add_argument('-ox', '--outxml', default = 'field-p-sc.xml', help = 'output OpenMM xml file (default: field-p-sc.xml)')
     parser.add_argument('-q', '--sapt', action = 'store_true', help = 'use sapt calculated k values, default: use predicted k values')
