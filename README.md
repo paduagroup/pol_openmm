@@ -1,5 +1,7 @@
 # CL&Pol force field in xml format for use with OpenMM
 
+These tools follow the same procedure as in [paduagroup/clandpol](https://github.com/paduagroup/clandpol) to create input files for polarizable simulations, so for more detailed information check the instructions there.
+
 ## Creating Input Files
 
 1. Use `fftool` and `packmol` as usual, only in the second round give the `-x --type` options:
@@ -10,7 +12,7 @@
 
     This creates `field.xml` and `config.pdb`
 
-2. Add Drude particles using the `polxml` script (a version of the `polarizer`). Supposing an `alpha.ff` force field file describing the Drude parameters is present, run
+2. Add Drude particles using the `polxml` script (analogous to the `polarizer` script from [paduagroup/clandpol](https://github.com/paduagroup/clandpol)). Supposing an `alpha.ff` force field file describing the Drude parameters is present, run
 
         polxml
 
