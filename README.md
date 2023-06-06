@@ -18,7 +18,7 @@ These tools follow the same procedure as in [paduagroup/clandpol](https://github
 
     This  creates files `field-p.xml` and `config-p.pdb` with Drude particles added after each core and the necessary force field terms. These files should run with OpenMM.
 
-3. Scale the LJ potentials, for which fragment molecular files are required (in this example the additional `meoh.zmat` for the fragments of ethyleneglycol). A `frag.inp` file specifying which atoms belong to which fragments needs to be prepared. The identification is by atom name:
+3. Scale the LJ potentials, for which the fragment database `fragment.ff` and fragment molecular files are required (in this example the additional `meoh.zmat` for the fragments of ethyleneglycol). A `frag.inp` file specifying which atoms belong to which fragments needs to be prepared. The identification is by atom name:
 
         # frag.inp for ChCl:EG
         ch N4 C1 C1A COL H1 HC OH
