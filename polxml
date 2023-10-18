@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # polxml.py - add Drude oscillators to OpenMM xml force field file.
 # Agilio Padua <agilio.padua@ens-lyon.fr>
-# version 2021/05/12
+# version 2023/10/18
 
 
 import argparse
@@ -377,7 +377,7 @@ class Forcefield(object):
 def main():
     parser = argparse.ArgumentParser(description = usage,
              formatter_class = argparse.RawTextHelpFormatter)
-    parser.add_argument('-f', '--ffdrude', default = 'alpha.ff',
+    parser.add_argument('-a', '--alpha_file', default = 'alpha.ff',
                         help = 'Drude parameter file (default: alpha.ff)')
     parser.add_argument('-e', '--eps', type=float, default = '0.05',
                         help = 'Max DC-DP distance (default: 0.05 A)')
