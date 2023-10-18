@@ -695,8 +695,8 @@ def main():
 
     args = parser.parse_args()
 
-    ff = FragmentFField(args.ff_filename)
-    syst = System(args.input_filename)
+    ff = FragmentFField(args.ff_file)
+    syst = System(args.id_file)
     syst.GetFragments(ff,args.polarisable)
 
     if args.scsig is not None:
@@ -705,7 +705,7 @@ def main():
     syst.GetFragmentPairs(ff)
 
     if (not args.sapt):
-        pol = Polarisation(args.alpha_filename)
+        pol = Polarisation(args.alpha_file)
         syst.GetFragAtoms(pol)
         syst.GetKPred()
     

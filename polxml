@@ -393,7 +393,7 @@ def main():
 
     config = Topology(args.inpdb)
     ff = Forcefield(args.inxml)
-    drude = Drude(args.ffdrude, config, ff)
+    drude = Drude(args.alpha_file, config, ff)
     ff.polarize(drude)
     ff.write(args.outxml)
     print('polarizable force field written to', args.outxml)
