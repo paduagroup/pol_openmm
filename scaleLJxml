@@ -681,7 +681,7 @@ def PrintReport(syst, sapt, scsig, polarisable):
 def main():
     parser = argparse.ArgumentParser(description = usage, formatter_class = argparse.RawTextHelpFormatter)
     parser.add_argument('-f', '--ff_file', type=str, default = 'fragment.ff', help = 'fragment force field (default: fragment.ff)')
-    parser.add_argument('-a', '--alpha_filen', type=str, default = 'alpha.ff', help = 'polarisability values file (default: alpha.ff)')
+    parser.add_argument('-a', '--alpha_file', type=str, default = 'alpha.ff', help = 'polarisability values file (default: alpha.ff)')
     parser.add_argument('-i', '--id_file', type=str, default = 'frag.inp', help = 'identify atomic indices of fragments (default: frag.inp)')
     parser.add_argument('-ix', '--inxml', default = 'field-p.xml', help = 'input OpenMM xml file (default: field-p.xml)')
     parser.add_argument('-ox', '--outxml', default = 'field-p-sc.xml', help = 'output OpenMM xml file (default: field-p-sc.xml)')
