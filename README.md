@@ -10,7 +10,7 @@ These tools follow the same procedure as in [paduagroup/clandpol](https://github
         packmol < pack.inp
         fftool 200 ch.xyz 200 Cl.zmat 400 EG.zmat -b 55 -x --type
 
-    This creates `field.xml` and `config.pdb`
+    This creates `field.xml` and `config.pdb`.
 
 2. Add Drude particles using the `polxml` script (analogous to the `polarizer` script from [paduagroup/clandpol](https://github.com/paduagroup/clandpol)). Supposing an `alpha.ff` force field file describing the Drude parameters is present, run
 
@@ -43,11 +43,11 @@ This is unfortunate when using the `scaleLJxml` script. It happens because LAMMP
 
 ### Unique atom names and types
 
-The `polxml` script creates unique atom names (called `type` in the `xml` force field) and bonded types (`class` in the `xml` format) for the entire system because OpenMM assigns the Drude particles to their cores by looking for a specific atom `type`. Although the bonded part of the force field can be specified by atom `class`, which is compact, the unique atom names give rise to a huge number of pair interactions, so the non-bonded section of the `xml` file is long.
+The `--type` option of `fftool` writes the non-bonded terms using unique atom types (called `type` in the `xml` force field) for the entire system. This is needed by `scaleLJxml` in order to scale the LJ parameters based on fragments. However, this may be very slow since the unique atom names give rise to a huge number of pair interactions, and the non-bonded section of the `xml` file becomes very long.
 
-The unique atom `type` and `class` are composed from 3 characters from the molecule (`residue`) name, plus the atom name, plus a serial number. Drude particles get a preceding `D`.
+The unique atom `type` are composed from 3 characters from the molecule (`residue`) name, plus the atom name, plus a serial number. Drude particles get a preceding `D-`.
 
-Within each `residue` the atom `name` is composed of the chemical element plus a serial number if more than 1. These have to be unique within a `residue` because they are used to specify bonds. This is the CHARMM convention, quite different from the OPLS one that we use mostly. We suppose it is also used by TRAVIS.
+Within each `residue` the atom `name` is composed of the chemical element plus a serial number if more than 1 atom of the same element are present. These have to be unique within a `residue` because they are used to specify bonds. This is the CHARMM convention, quite different from the OPLS one that we use mostly. We suppose it is also used by TRAVIS.
 
 
 ### Choice of Drude thermostat (and OpenMM version) 
