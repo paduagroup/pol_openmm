@@ -71,7 +71,7 @@ class Topology(object):
                 i = int(line[6:11])  - 1
                 j = int(line[11:16]) - 1
                 if self.atoms[i]['seq'] != self.atoms[j]['seq']:
-                    print('bond atoms {0:d} and {1:d} not in same molecule'.format(i, j))
+                    print(f'bond atoms {i:d} and {j:d} not in same molecule')
                     exit(1)
                 self.bonds.append({'i': i, 'j': j})
                 line = f.readline()
@@ -135,8 +135,7 @@ class Topology(object):
             if nh[i] == -1:
                 nh[i] = n
             elif nh[i] != n:
-                raise RuntimeError('atom type {0} with different numbers of '\
-                    'bonded H'.format(at))
+                raise RuntimeError(f'atom type {at} with different numbers of bonded H')
 
     def polarize(self, ff, eps=0.05):
         '''add Drude particles and bonds to topology'''
@@ -301,7 +300,7 @@ class Forcefield(object):
                     # subtract Drude mass from DC
                     # dcm = float(atom.attrib['mass'])
                     # dcm -= dt['dm']
-                    # atom.set('mass', '{0:.4f}'.format(dcm))
+                    # atom.set('mass', f'{dcm:.4f}')
                     break
 
         for residue in self.root.iter('Residue'):
@@ -321,7 +320,7 @@ class Forcefield(object):
                             dcq = float(atom.get('charge'))
                             # subtract Drude charge from DC
                             dcq -= dt['dq']
-                            atom.set('charge', '{0:.5f}'.format(dcq))
+                            atom.set('charge', f'{dcq:.5f}')
                             # insert DP
                             dp = ET.Element('Atom')
                             dp.set('name', 'D' + atname)
@@ -400,7 +399,7 @@ def main():
     print('polarizable force field written to', args.outxml)
     print('adding Drude particles to configuration...')
     config.polarize(ff, args.eps)
-    print('{} atoms {} Drude particles'.format(config.natom, config.ndrude))
+    print(f'{config.natom} atoms {config.ndrude} Drude particles')
     config.write(args.outpdb)
     print('configuration written to', args.outpdb)
 
