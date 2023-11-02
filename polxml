@@ -366,10 +366,11 @@ class Forcefield(object):
                     break
 
         ljforce = self.root.find('LennardJonesForce')
-        dp = ET.SubElement(ljforce, 'Atom')
-        dp.set('class', 'DRUD')
-        dp.set('sigma', '1.0')
-        dp.set('epsilon', '0.0')
+        if ljforce:
+            dp = ET.SubElement(ljforce, 'Atom')
+            dp.set('class', 'DRUD')
+            dp.set('sigma', '1.0')
+            dp.set('epsilon', '0.0')
 
 
 # --------------------------------------
