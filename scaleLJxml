@@ -369,8 +369,8 @@ class Fragment(Monomer):
     def GetAtomsFromPdb(self, pol):
         '''read atoms from .pdb for a given fragment'''
 
-        zfilename = self.name+'.pdb'
-        with open(zfilename, 'r') as f:
+        filename = self.name+'.pdb'
+        with open(filename, 'r') as f:
             atoms = []
             line = f.readline()
             while 'COMPND' not in line:
@@ -385,7 +385,7 @@ class Fragment(Monomer):
                 at_name = tok[2]
                 atom = next((x for x in pol.atomtypes if x.name == at_name), None)
                 if atom is None:
-                    raise Exception('  error: atom type {0} not found in {1}'.format(at_name,pol.filename))
+                    raise Exception('  error: atom type {0} not found in {1}'.format(at_name, pol.filename))
                 atoms.append(atom)
                 line = f.readline()
         self.atoms = atoms
