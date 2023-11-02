@@ -1,8 +1,8 @@
 #!/usr/bin/env python
-# scaleLJ.py - scale epsilon and sigma LJ parameters in pair.lmp LAMMPS file.
+# scaleLJxml - scale epsilon and sigma LJ parameters in pair.lmp LAMMPS file.
 # Agilio Padua <agilio.padua@ens-lyon.fr>
 # Kateryna Goloviznina <kateryna.goloviznina@ens-lyon.fr>
-# version 2023/10/18
+# version 2023/11/02
 
 import sys
 import argparse
@@ -417,13 +417,13 @@ class Fragment(Monomer):
                     at_name = tok[shift]
                     atom = next((x for x in pol.atomtypes if x.name == at_name), None)
                     if atom is None:
-                        raise Exception('  error: atom type {0} not found in {1}'.format(at_name,pol.filename))
+                        raise Exception('  error: atom type {0} not found in {1}'.format(at_name, pol.filename))
                     atoms.append(atom)
                     line = f.readline()
             self.atoms = atoms
                             
         except IOError:
-            print('  error: fragment zmat file {0} not found'.foramt(filename))
+            print('  error: fragment zmat file {0} not found'.format(zfilename))
             sys.exit(1)
         except Exception as e:
             print(e)
@@ -454,13 +454,13 @@ class Fragment(Monomer):
                     at_name = tok[0]
                     atom = next((x for x in pol.atomtypes if x.name == at_name), None)
                     if atom is None:
-                        raise Exception('  error: atom type {0} not found in {1}'.format(at_name,pol.filename))
+                        raise Exception('  error: atom type {0} not found in {1}'.format(at_name, pol.filename))
                     atoms.append(atom)
                     line = f.readline()
             self.atoms = atoms
                             
         except IOError:
-            print('  error: fragment zmat file {0} not found'.foramt(filename))
+            print('  error: fragment zmat file {0} not found'.format(xyzfilename))
             sys.exit(1)
         except Exception as e:
             print(e)
@@ -530,7 +530,7 @@ class Polarisation(object):
                     a_name = tok[0]
                     a_alpha = float(tok[4])
                     if next((x for x in self.atomtypes if x.name == a_name), None) is not None:
-                        raise Exception('  error: atom type {0} is specified twice in {1}'.format(a_name,self.filename))
+                        raise Exception('  error: atom type {0} is specified twice in {1}'.format(a_name, self.filename))
                     self.atomtypes.append(AtomType(a_name,a_alpha))
 
         except IOError:
@@ -566,12 +566,12 @@ class System(object):
                         tok = line.strip().split()
                         m_name = tok[0].lower()
                         if next((x for x in self.fragments if x.name == m_name), None) is not None:
-                            raise Exception('  error: fragment {0} is specified twice in {1}'.format(m_name,self.filename))
+                            raise Exception('  error: fragment {0} is specified twice in {1}'.format(m_name, self.filename))
                         if len(tok)<2:
-                            raise Exception('  error: no atomic names for {0} fragment in {1}'.format(m_name,self.filename))
+                            raise Exception('  error: no atomic names for {0} fragment in {1}'.format(m_name, self.filename))
                         ind_range = tok[1:]                       
                         if next((x for x in ind_range if _Const.isfloat(x[0])), None) is not None:
-                            raise Exception('  error: fragment {0} requires atomic labels and not numbers in {1}'.format(m_name,self.filename))
+                            raise Exception('  error: fragment {0} requires atomic labels and not numbers in {1}'.format(m_name, self.filename))
                     m = next((x for x in ff.monomers if x.name == m_name), None)
                     if m is None:
                         raise Exception('  error: fragment {0} not found in {1}'.format(m_name, ff.filename))
@@ -579,7 +579,7 @@ class System(object):
                     self.fragments.append(Fragment(m,ind_range,Fragment.PolExclude(m,p)))
 
         except IOError:
-            print('  error: fragment input file {0} not found'.format(filename))
+            print('  error: fragment input file {0} not found'.format(self.filename))
             sys.exit(1)
         except Exception as e:
             print(e)
