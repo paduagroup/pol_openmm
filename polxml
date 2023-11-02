@@ -3,7 +3,6 @@
 # Agilio Padua <agilio.padua@ens-lyon.fr>
 # version 2023/10/18
 
-
 import argparse
 import random
 import xml.etree.ElementTree as ET
@@ -135,7 +134,8 @@ class Topology(object):
             if nh[i] == -1:
                 nh[i] = n
             elif nh[i] != n:
-                raise RuntimeError(f'atom type {at} with different numbers of bonded H')
+                print(f'atom type {at} with different numbers of bonded H')
+                exit(1)
 
     def polarize(self, ff, eps=0.05):
         '''add Drude particles and bonds to topology'''
@@ -270,6 +270,14 @@ class Forcefield(object):
 
         self.ftree = ET.parse(infile)
         self.root = self.ftree.getroot()
+
+        atomtypes = self.root.find('AtomTypes')
+        for atom in atomtypes:
+            atname = atom.get('name')
+            tok = atname.split('-')
+            if len(tok) < 3:
+                print('error: input xml file does not have unique atom names. Use fftool with --types option')
+                exit(1)
 
     def write(self, outfile):
         '''write force field to xml file'''
