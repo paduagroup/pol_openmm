@@ -45,7 +45,7 @@ This is unfortunate when using the `scaleLJxml` script. It happens because LAMMP
 
 The `--type` option of `fftool` uses non-bonded types as the atom `class` (instead of the bonded types). This is more general since it allows for variations in LJ parameters. Furthermore, to scale LJ terms when adding polarization (`scaleLJxml`), the non-bonded i-j terms have to be identified by fragment.
 
-We could use the unique atom types required by OpenMM to set Drude particle-core pairs, but this results potentially in a very large number of i-j combinations (`NBFixPairs` list too long) for large molecules. Therefore, here we use the non-bonded types as atom `class`, instead of the bonded types. Bonded terms will be more numerous but `NBFixPairs` will be much less.
+We could use the unique atom types required by OpenMM to set Drude particle-core pairs, but this results potentially in a very large number of i-j combinations (`NBFixPairs` list too long) for large molecules. Therefore, here we use the non-bonded types as atom `class`, instead of the bonded types. Bonded terms will be a bit more numerous but `NBFixPairs` will be much less.
 
 The unique atom `type` are composed from 3 characters from the molecule (`residue`) name, plus the atom name (non-bonded type), plus a serial number. Drude particles get a preceding `D-`.
 
