@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # polxml.py - add Drude oscillators to OpenMM xml force field file.
 # Agilio Padua <agilio.padua@ens-lyon.fr>
-# version 2023/10/18
+# version 2023/11/06
 
 import argparse
 import random
@@ -88,8 +88,10 @@ class Topology(object):
                 n += 1
                 f.write('HETATM{0:5d} {1:4s} {2:3s}  {3:4d}    '\
                         '{4:8.3f}{5:8.3f}{6:8.3f}  1.00  0.00          '\
-                        '{7:>2s}\n'.format(n, at['name'], at['mol'], at['seq'],
+                        '{7:>2s}\n'.format(n, at['name'][:4], at['mol'], at['seq'],
                         at['x'], at['y'], at['z'], at['ele']))
+                if len(at['name']) > 4:
+                    print('warning: atom name {} too long in pdb'.format(at['name']))
             for bd in self.bonds:
                 f.write('CONECT{0:5d}{1:5d}\n'.format(bd['i']+1, bd['j']+1))
             f.write('END\n')
@@ -137,7 +139,7 @@ class Topology(object):
                 print(f'atom type {at} with different numbers of bonded H')
                 exit(1)
 
-    def polarize(self, ff, eps=0.05):
+    def polarize(self, ff, eps=0.02):
         '''add Drude particles and bonds to topology'''
 
         dplist = []
@@ -387,8 +389,8 @@ def main():
              formatter_class = argparse.RawTextHelpFormatter)
     parser.add_argument('-a', '--alpha_file', default = 'alpha.ff',
                         help = 'Drude parameter file (default: alpha.ff)')
-    parser.add_argument('-e', '--eps', type=float, default = '0.05',
-                        help = 'Max DC-DP distance (default: 0.05 A)')
+    parser.add_argument('-e', '--eps', type=float, default = '0.02',
+                        help = 'Max DC-DP distance (default: 0.02 A)')
     parser.add_argument('-ix', '--inxml', default = 'field.xml',
                         help = 'input OpenMM xml file (default: field.xml)')
     parser.add_argument('-ox', '--outxml', default = 'field-p.xml',
