@@ -43,13 +43,9 @@ This is unfortunate when using the `scaleLJxml` script. It happens because LAMMP
 
 ### Unique atom names and types
 
-The `--type` option of `fftool` uses non-bonded types as the atom `class` (instead of the bonded types). This is more general since it allows for variations in LJ parameters. Furthermore, to scale LJ terms when adding polarization (`scaleLJxml`), the non-bonded i-j terms have to be identified by fragment.
+The `--type` option of `fftool` creates unique atom types (within the entire system), as required by OpenMM to set Drude particle-core pairs. The unique atom `type` is composed from 3 characters from the molecule (`residue`) name, plus the atom name (non-bonded type), plus a serial number. Drude particles will get a preceding `D-`. As a consequence of using the unique atom types, the non-bonded types of the force field are used as the atom `class` (instead of the bonded types), which causes some redundancies in the bonded terms.
 
-We could use the unique atom types required by OpenMM to set Drude particle-core pairs, but this results potentially in a very large number of i-j combinations (`NBFixPairs` list too long) for large molecules. Therefore, here we use the non-bonded types as atom `class`, instead of the bonded types. Bonded terms will be a bit more numerous but `NBFixPairs` will be much less.
-
-The unique atom `type` are composed from 3 characters from the molecule (`residue`) name, plus the atom name (non-bonded type), plus a serial number. Drude particles get a preceding `D-`.
-
-Within each `residue` the atom `name` is composed of the chemical element plus a serial number if more than 1 atom of the same element are present. These have to be unique within a `residue` because they are used to specify bonds. This is the CHARMM convention, quite different from the OPLS one that we use mostly. We suppose it is also used by TRAVIS.
+Within each `residue` the atom `name` is composed of the chemical element plus a serial number if more than 1 atom of the same element are present. These have to be unique within a `residue` because they are used to specify bonds. This is the CHARMM convention, quite different from the OPLS one that we use mostly. We suppose it is also used by TRAVIS. In order to circumvent the limits of the PDB format (4 characters for the atom name), 32-decimal notation is used for the serial number in very large molecules or materials (which are considered as a single molecule).
 
 
 ### Choice of Drude thermostat (and OpenMM version) 
@@ -66,4 +62,3 @@ Another point is that the Langevin integrators can be considerably faster than N
 ### Temperatures
 
 The Drude integrators in OpenMM don't compute the temperatures of atoms and Drude particles (relative to cores) and show a global temperature that is lower than the set point. The temperatures corresponding to atoms and Drude particles have to be computed separately by the user (as shown in the `omm.py` script).
-
