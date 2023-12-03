@@ -18,7 +18,7 @@ These tools follow the same procedure as in [paduagroup/clandpol](https://github
 
     This  creates files `field-p.xml` and `config-p.pdb` with Drude particles added after each core and the necessary force field terms. These files should run with OpenMM.
 
-3. Scale the LJ potentials, for which the fragment database `fragment.ff` and fragment molecular files are required (in this example the additional `meoh.zmat` for the fragments of ethyleneglycol). A `frag.inp` file specifying which atoms belong to which fragments needs to be prepared. The identification is by atom name:
+3. If necessary scale the LJ potentials, for which the fragment database `fragment.ff` and fragment molecular files are required (in this example the additional `meoh.zmat` for the fragments of ethyleneglycol). A `frag.inp` file specifying which atoms belong to which fragments needs to be prepared. The identification is by atom name:
 
         # frag.inp for ChCl:EG
         ch N4 C1 C1A COL H1 HC OH
@@ -31,7 +31,13 @@ These tools follow the same procedure as in [paduagroup/clandpol](https://github
 
     will generate `field-p-sc.xml`
 
-4. Use `field-p-sc.xml` and `config-p.pdb` to run OpenMM. Since Drude particles are already present in the `pdb` file, it is not necessary for the script to add the Drude particles, although it should also be possible to use the initial `config.pdb` and have OpenMM add the Drude particles with `modeller.addExtraParticles(forcefield)`.
+4. Tun OpenMM using the  `field-p-sc.xml` and `config-p.pdb` as force field and topology. Since Drude particles are already present in `config-p.pdb`, it is not necessary to add Drude particles in the OpenMM script, although it should also be possible to use the initial `config.pdb` and have OpenMM add Drude particles with `modeller.addExtraParticles(forcefield)`.
+
+5. (optional) Add Coulomb damping between charges and induced dipoles, as required to avoid the polarization catastrophe in systems with strong hydrogen bonds or densely-charged ions. The following script creates OpenMM code implementing the Tang-Toennies damping function:
+
+        coulttxml field-p-sc.xml config-p.pdb
+
+The code generated is to be included in the OpenMM script (the atoms involved have to be identified).
 
 
 ## Some points worth mentioning
