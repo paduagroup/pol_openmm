@@ -33,9 +33,9 @@ These tools follow the same procedure as in [paduagroup/clandpol](https://github
 
 4. Tun OpenMM using the  `field-p-sc.xml` and `config-p.pdb` as force field and topology. Since Drude particles are already present in `config-p.pdb`, it is not necessary to add Drude particles in the OpenMM script, although it should also be possible to use the initial `config.pdb` and have OpenMM add Drude particles with `modeller.addExtraParticles(forcefield)`.
 
-5. (optional) Add Coulomb damping between charges and induced dipoles, as required to avoid the polarization catastrophe in systems with strong hydrogen bonds or densely-charged ions. The following script creates OpenMM code implementing the Tang-Toennies damping function:
+5. If necessary add Coulomb damping between charges and induced dipoles. This is often required to avoid the polarization catastrophe in systems with strong hydrogen bonds or densely-charged ions. The following script creates OpenMM code implementing the Tang-Toennies damping function:
 
-        coulttxml field-p-sc.xml config-p.pdb
+        coulttxml field-p.xml config-p.pdb
 
 The code generated is to be included in the OpenMM script (the atoms involved have to be identified).
 
