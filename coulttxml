@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # Create code to add TT damping between Drude dipoles in OpenMM
-# Vinicius Piccoli, Agilio Padua, 2023/11/28
+# Vinicius Piccoli, Agilio Padua, 2023/12/15
 
 import sys
 import xml.etree.ElementTree as ET
@@ -20,7 +20,7 @@ def count_molecules_from_pdb(pdb_filename):
                     if molecule_number > molecule_counts[residue_name]:
                         molecule_counts[residue_name] = molecule_number
     numbers = [molecule_counts[res] for res in molecule_counts]
-    for i in range(len(numbers) - 1, 1, -1):
+    for i in range(len(numbers) - 1, 0, -1):
         numbers[i] = numbers[i] - numbers[i-1]
     return numbers
 
