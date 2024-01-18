@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # polxml.py - add Drude oscillators to OpenMM xml force field file.
 # Agilio Padua <agilio.padua@ens-lyon.fr>
-# version 2023/11/13
+# version 2024/01/18
 
 import argparse
 import random
@@ -32,6 +32,39 @@ new bonds to the xml file and new particles to the pdb file.
 
 # --------------------------------------
 
+def hexiflarge(i, ndig):
+    """
+    Convert number to hex starting with A if more than n digits.
+    VMD, OpenMM convention in PDB files with natom > 99999, nmol > 9999
+    """
+
+    declim = 10**ndig
+    hexlim = int('A' + (ndig-1)*'0', 16)
+
+    if i < declim:
+        return f'{i}'
+    else:
+        i = i - declim + hexlim
+        return f'{i:X}'
+
+def intfromhexiflarge(a):
+    """
+    Convert string containing hex number (large systems) to int.
+    VMD, OpenMM convention in PDB files with natom > 99999, nmol > 9999
+    """
+
+    if a.isdigit():
+        return int(a)
+    
+    ndig = len(a)
+    declim = 10**ndig
+    hexlim = int('A' + (ndig-1)*'0', 16)
+
+    i = int(a, 16)
+    return i - hexlim + declim
+
+# --------------------------------------
+
 class Topology(object):
     '''topology and coordinates from pdb file'''
 
@@ -54,10 +87,10 @@ class Topology(object):
                 line = f.readline()
             while 'ATOM' in line or 'HETATM' in line:
                 atom = {}
-                atom['n'] = int(line[6:11])
+                atom['n'] = intfromhexiflarge(line[6:11])
                 atom['name'] = line[12:16].strip()
                 atom['mol'] = line[17:20].strip()
-                atom['seq'] = int(line[22:26])
+                atom['seq'] = intfromhexiflarge(line[22:26])
                 atom['x'] = float(line[30:38])
                 atom['y'] = float(line[38:46])
                 atom['z'] = float(line[46:54])
@@ -68,8 +101,8 @@ class Topology(object):
                 self.atoms.append(atom)
                 line = f.readline()
             while 'CONECT' in line:
-                i = int(line[6:11])  - 1
-                j = int(line[11:16]) - 1
+                i = intfromhexiflarge(line[6:11]) - 1
+                j = intfromhexiflarge(line[11:16]) - 1
                 if self.atoms[i]['seq'] != self.atoms[j]['seq']:
                     print(f'bond between atoms {i:d} and {j:d} of different molecules')
                     exit(1)
@@ -87,14 +120,18 @@ class Topology(object):
             n = 0
             for at in self.atoms:
                 n += 1
+                atidx = hexiflarge(n, 5)
+                molidx = hexiflarge(at['seq'], 4)
                 f.write('HETATM{0:5d} {1:4s} {2:3s}  {3:4d}    '\
                         '{4:8.3f}{5:8.3f}{6:8.3f}  1.00  0.00          '\
-                        '{7:>2s}\n'.format(n, at['name'][:4], at['mol'], at['seq'],
+                        '{7:>2s}\n'.format(atidx, at['name'][:4], at['mol'], molidx,
                         at['x'], at['y'], at['z'], at['ele']))
                 if len(at['name']) > 4:
                     print('warning: atom name {} too long in pdb'.format(at['name']))
             for bd in self.bonds:
-                f.write('CONECT{0:5d}{1:5d}\n'.format(bd['i']+1, bd['j']+1))
+                atidx_i = hexiflarge(bd.i + 1, 5)
+                atidx_j = hexiflarge(bd.j + 1, 5)
+                f.write('CONECT{0:5d}{1:5d}\n'.format(atidx_i, atidx_j))
             f.write('END\n')
 
     def settypes(self, ff):
