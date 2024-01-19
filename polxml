@@ -122,7 +122,7 @@ class Topology(object):
                 n += 1
                 atidx = hexiflarge(n, 5)
                 molidx = hexiflarge(at['seq'], 4)
-                f.write('HETATM{0:5d} {1:4s} {2:3s}  {3:4d}    '\
+                f.write('HETATM{0:>5s} {1:4s} {2:3s}  {3:>4s}    '\
                         '{4:8.3f}{5:8.3f}{6:8.3f}  1.00  0.00          '\
                         '{7:>2s}\n'.format(atidx, at['name'][:4], at['mol'], molidx,
                         at['x'], at['y'], at['z'], at['ele']))
@@ -131,7 +131,7 @@ class Topology(object):
             for bd in self.bonds:
                 atidx_i = hexiflarge(bd.i + 1, 5)
                 atidx_j = hexiflarge(bd.j + 1, 5)
-                f.write('CONECT{0:5d}{1:5d}\n'.format(atidx_i, atidx_j))
+                f.write('CONECT{0:>5s}{1:>5s}\n'.format(atidx_i, atidx_j))
             f.write('END\n')
 
     def settypes(self, ff):
