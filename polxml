@@ -129,8 +129,8 @@ class Topology(object):
                 if len(at['name']) > 4:
                     print('warning: atom name {} too long in pdb'.format(at['name']))
             for bd in self.bonds:
-                atidx_i = hexiflarge(bd.i + 1, 5)
-                atidx_j = hexiflarge(bd.j + 1, 5)
+                atidx_i = hexiflarge(bd['i'] + 1, 5)
+                atidx_j = hexiflarge(bd['j'] + 1, 5)
                 f.write('CONECT{0:>5s}{1:>5s}\n'.format(atidx_i, atidx_j))
             f.write('END\n')
 
