@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # Create code to add TT damping between Drude dipoles in OpenMM
-# Vinicius Piccoli, Agilio Padua <agilio.padua@ens-lyon.fr>, 2024/01/22
+# Vinicius Piccoli, Agilio Padua <agilio.padua@ens-lyon.fr>, 2024/02/22
 
 import sys
 import xml.etree.ElementTree as ET
