@@ -41,6 +41,27 @@ def count_molecules_from_pdb(pdb_filename):
         numbers[i] = numbers[i] - numbers[i-1]
     return numbers
 
+def count_molecules_from_pdbx(pdbx_filename):
+    '''Count molecules in PDB file'''
+
+    molecule_counts = {}
+    with open(pdbx_filename, 'r') as file:
+        line = file.readline()
+        for line in file:
+            if line.startswith('HETATM'):
+                fields = line.strip().split()
+                residue_name = fields[4].strip()
+                molecule_number = int(fields[5])
+                if residue_name not in molecule_counts:
+                    molecule_counts[residue_name] = 1
+                else:
+                    if molecule_number > molecule_counts[residue_name]:
+                        molecule_counts[residue_name] = molecule_number
+    numbers = [molecule_counts[res] for res in molecule_counts]
+    for i in range(len(numbers) - 1, 0, -1):
+        numbers[i] = numbers[i] - numbers[i-1]
+    return numbers
+
 # -------------------------------------
 
 before = '''
@@ -78,11 +99,10 @@ system.addForce(CoulTT)
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: coulttxml field-p.xml config-p.pdb")
+        print("Usage: coulttxml field-p.xml config-p.pdb/config.mmcif")
         sys.exit(1)
 
     xml_file = sys.argv[1]
-    pdb_file = sys.argv[2]
 
     tree = ET.parse(xml_file)
     root = tree.getroot()
@@ -90,11 +110,17 @@ def main():
     residues_xml = root.find('Residues').findall('Residue')
     residue_names_xml = [residue.attrib['name'] for residue in residues_xml]
 
-    num_molecules = count_molecules_from_pdb(pdb_file)
+    if sys.argv[2] == 'config-p.pdb':
+        pdb_file = sys.argv[2]
+        num_molecules = count_molecules_from_pdb(pdb_file)
 
-    # Check if the number of residues matches the number of types in the PDB file
+    if sys.argv[2] == 'config-p.mmcif':
+        pdbx_file = sys.argv[2]
+        num_molecules = count_molecules_from_pdbx(pdbx_file)
+
+    # Check if the number of residues matches the number of types in the PDB or PDBx file
     if len(residue_names_xml) != len(num_molecules):
-        print("Error: The number of different residues in the XML does not match the count from the PDB file.")
+        print("Error: The number of different residues in the XML does not match the count from the PDB or PDBx file.")
         sys.exit(1)
 
     with open('addCoulTT.py', 'w') as f:
