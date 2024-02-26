@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # polxml.py - add Drude oscillators to OpenMM xml force field file.
 # Agilio Padua <agilio.padua@ens-lyon.fr>
-# version 2024/02/22
+# version 2024/02/08
 
 import argparse
 import random
@@ -85,8 +85,191 @@ def atomic_symbol(name):
 
 # --------------------------------------------
 
+def readpdb(Topology, pdbfile):
+    '''read topology from PDB'''
+    with open(pdbfile, 'r') as f:
+        line = f.readline()
+        while 'CRYST1' not in line:
+            line = f.readline()
+        Topology.box = line.strip()
+        line = f.readline()
+        while not (line.startswith('ATOM') or line.startswith('HETATM')):
+            line = f.readline()
+        while 'ATOM' in line or 'HETATM' in line:
+            atom = {}
+            atom['n'] = intfromhexiflarge(line[6:11])
+            atom['name'] = line[12:16].strip()
+            atom['mol'] = line[17:20].strip()
+            atom['seq'] = intfromhexiflarge(line[22:26])
+            atom['x'] = float(line[30:38])
+            atom['y'] = float(line[38:46])
+            atom['z'] = float(line[46:54])
+            atom['ele'] = line[76:78].strip()
+            atom['nH'] = 0         # number of bonded H
+            atom['type'] = ''      # non-bonded type
+            atom['class'] = ''     # bonded type
+            Topology.atoms.append(atom)
+            line = f.readline()
+        while 'CONECT' in line:
+            i = intfromhexiflarge(line[6:11]) - 1
+            j = intfromhexiflarge(line[11:16]) - 1
+            if Topology.atoms[i]['seq'] != Topology.atoms[j]['seq']:
+                print(f'bond between atoms {i:d} and {j:d} of different molecules')
+                exit(1)
+            Topology.bonds.append({'i': i, 'j': j})
+            line = f.readline()
+        Topology.natom = len(Topology.atoms)
+    
+def readpdbx(Topology, pdbxfile):
+    '''read topology from PDBx/mmcif'''
+    with open(pdbxfile, 'r') as f:
+        line = f.readline()
+        atoms_columns = []
+        bonds_columns = []
+            
+        # Storage of columns numbers
+        site_id = None
+        type_symbol = None
+        atom_id = None
+        comp_id = None
+        seq_id = None
+        asym_id = None
+        Cartn_x = None
+        Cartn_y = None
+        Cartn_z = None
+        formal_charge = None
+
+        ptnr1_label_seq_id = None
+        ptnr2_label_seq_id = None
+        ptnr1_label_atom_id = None
+        ptnr2_label_atom_id = None
+
+        for line in f:
+        # Read available categories in PDBx/mmcif file and store them in a "table of contents"
+            if line.startswith('_atom'):
+                fields = line.strip().split()
+                atoms_columns.append(fields[0].strip())
+            if line.startswith('_struct'):
+                fields = line.strip().split()
+                bonds_columns.append(fields[0].strip())
+
+        # Atoms section
+        for j in range (0,len(atoms_columns)):
+            if atoms_columns[j] == '_atom_site.id':
+                site_id = int(j)
+            if atoms_columns[j] == '_atom_site.type_symbol':
+                type_symbol = int(j)
+            if atoms_columns[j] == '_atom_site.label_atom_id':
+                atom_id = int(j)
+            if atoms_columns[j] == '_atom_site.label_comp_id':
+                comp_id = int(j)
+            if atoms_columns[j] == '_atom_site.label_seq_id':
+                seq_id = int(j)
+            if atoms_columns[j] == '_atom_site.label_asym_id':
+                asym_id = int(j)
+            if atoms_columns[j] == '_atom_site.Cartn_x':
+                Cartn_x = int(j)
+            if atoms_columns[j] == '_atom_site.Cartn_y':
+                Cartn_y = int(j)
+            if atoms_columns[j] == '_atom_site.Cartn_z':
+                Cartn_z = int(j)
+            if atoms_columns[j] == '_atom_site.pdbx_formal_charge':
+                formal_charge = int(j)
+        if site_id == None:
+            raise RuntimeError("Expected '_atom_site.id' data in PDBx/mmcif config file")
+        if type_symbol == None:
+            raise RuntimeError("Expected '_atom_site.type_symbol' data in PDBx/mmcif config file")
+        if atom_id == None:
+            raise RuntimeError("Expected '_atom_site.label_atom_id' data in PDBx/mmcif config file")
+        if comp_id == None:
+            raise RuntimeError("Expected '_atom_site.label_comp_id' data in PDBx/mmcif config file")
+        if seq_id == None:
+            raise RuntimeError("Expected '_atom_site.label_seq_id' data in PDBx/mmcif config file")
+        if asym_id == None:
+            raise RuntimeError("Expected '_atom_site.label_asym_idl' data in PDBx/mmcif config file")
+        if Cartn_x == None:
+            raise RuntimeError("Expected '_atom_site.Cartn_x' data in PDBx/mmcif config file")
+        if Cartn_y == None:
+            raise RuntimeError("Expected '_atom_site.Cartn_y' data in PDBx/mmcif config file")
+        if Cartn_z == None:
+            raise RuntimeError("Expected '_atom_site.Cartn_z' data in PDBx/mmcif config file")
+        if formal_charge == None:
+            raise RuntimeError("Expected '_atom_site.pdbx_formal_charge' data in PDBx/mmcif config file")
+            
+        # Bonds section
+        for j in range (0,len(bonds_columns)):
+            if bonds_columns[j] == '_struct_conn.ptnr1_label_seq_id':
+                ptnr1_label_seq_id = int(j)
+            if bonds_columns[j] == '_struct_conn.ptnr2_label_seq_id':
+                ptnr2_label_seq_id = int(j)
+            if bonds_columns[j] == '_struct_conn.ptnr1_label_atom_id':
+                ptnr1_label_atom_id = int(j)
+            if bonds_columns[j] == '_struct_conn.ptnr2_label_atom_id':
+                ptnr2_label_atom_id = int(j)
+        if ptnr1_label_seq_id == None:
+            raise RuntimeError("Expected '_struct_conn.ptnr1_label_seq_id' data in PDBx/mmcif config file")
+        if ptnr2_label_seq_id == None:
+            raise RuntimeError("Expected '_struct_conn.ptnr2_label_seq_id' data in PDBx/mmcif config file")
+        if ptnr1_label_atom_id == None:
+            raise RuntimeError("Expected '_struct_conn.ptnr1_label_atom_id' data in PDBx/mmcif config file")
+        if ptnr2_label_atom_id == None:
+            raise RuntimeError("Expected '_struct_conn.ptnr2_label_atom_id' data in PDBx/mmcif config file")
+        
+    # Second read to pick data of interest 
+    with open(pdbxfile, 'r') as file:
+        line = file.readline()
+        for line in file:
+            fields = line.strip().split()
+
+            if line.startswith("_cell.length_a"):
+                Topology.box.append(fields[1].strip())
+            elif line.startswith("_cell.length_b"):
+                Topology.box.append(fields[1].strip())
+            elif line.startswith("_cell.length_c"):
+                Topology.box.append(fields[1].strip())
+            elif line.startswith("_cell.angle_alpha"):
+                Topology.box.append(fields[1].strip())
+            elif line.startswith("_cell.angle_beta"):
+                Topology.box.append(fields[1].strip())
+            elif line.startswith("_cell.angle_gamma"):
+                Topology.box.append(fields[1].strip())
+                
+            if len(fields) == len(atoms_columns):
+                atom = {}
+                atom['n'] = int(fields[site_id])
+                atom['name'] = fields[atom_id].strip()
+                atom["mol"] = fields[comp_id].strip()
+                atom['seq'] = int(fields[seq_id])
+                atom['chain'] = int(fields[asym_id].strip())
+                atom['x'] = float(fields[Cartn_x])
+                atom['y'] = float(fields[Cartn_y])
+                atom['z'] = float(fields[Cartn_z])
+                atom['ele'] = fields[type_symbol].strip()
+                atom['charge'] = float(fields[formal_charge])
+                atom['nH'] = 0      # number of bonded H
+                atom['type'] = ''   # non-bonded type
+                atom['class'] = ''  # bonded type
+                Topology.atoms.append(atom)
+                
+            if len(fields) == len(bonds_columns):
+                atom_i = [int(fields[ptnr1_label_seq_id]), fields[ptnr1_label_atom_id].strip()]
+                atom_j = [int(fields[ptnr2_label_seq_id]), fields[ptnr2_label_atom_id].strip()]
+                i = None
+                j = None
+                for k in range (0, len(Topology.atoms)):
+                    if Topology.atoms[k]['seq'] == atom_i[0]:
+                        if Topology.atoms[k]['name'] == atom_i[1]:
+                            i = k
+                    if Topology.atoms[k]['seq'] == atom_j[0]:
+                        if Topology.atoms[k]['name'] == atom_j[1]:
+                            j = k
+                Topology.bonds.append({'i': i, 'j': j})
+    Topology.natom = len(Topology.atoms)
+
+# -------------------------------------------- 
+
 class Topology(object):
-    '''topology and coordinates from pdbx/mmcif file'''
+    '''topology and coordinates from pdb or pdbx/mmcif file'''
 
     def __init__(self, pdbfile):
         '''read from pdbx file'''
@@ -98,97 +281,13 @@ class Topology(object):
         self.ndrude = 0
         
         if pdbfile == 'config.pdb':
-            with open(pdbfile, 'r') as f:
-                line = f.readline()
-                while 'CRYST1' not in line:
-                    line = f.readline()
-                self.box = line.strip()
-                line = f.readline()
-                while not (line.startswith('ATOM') or line.startswith('HETATM')):
-                    line = f.readline()
-                while 'ATOM' in line or 'HETATM' in line:
-                    atom = {}
-                    atom['n'] = intfromhexiflarge(line[6:11])
-                    atom['name'] = line[12:16].strip()
-                    atom['mol'] = line[17:20].strip()
-                    atom['seq'] = intfromhexiflarge(line[22:26])
-                    atom['x'] = float(line[30:38])
-                    atom['y'] = float(line[38:46])
-                    atom['z'] = float(line[46:54])
-                    atom['ele'] = line[76:78].strip()
-                    atom['nH'] = 0         # number of bonded H
-                    atom['type'] = ''      # non-bonded type
-                    atom['class'] = ''     # bonded type
-                    self.atoms.append(atom)
-                    line = f.readline()
-                while 'CONECT' in line:
-                    i = intfromhexiflarge(line[6:11]) - 1
-                    j = intfromhexiflarge(line[11:16]) - 1
-                    if self.atoms[i]['seq'] != self.atoms[j]['seq']:
-                        print(f'bond between atoms {i:d} and {j:d} of different molecules')
-                        exit(1)
-                    self.bonds.append({'i': i, 'j': j})
-                    line = f.readline()
-                self.natom = len(self.atoms)
+            readpdb(self, pdbfile)
 
         if pdbfile == 'config.mmcif':
-            with open(pdbfile, 'r') as f:
-                line = f.readline()
-                for line in f:
-                    if line.startswith("_cell.length_a"):
-                        fields = line.strip().split()
-                        self.box.append(fields[1].strip())
-                    elif line.startswith("_cell.length_b"):
-                        fields = line.strip().split()
-                        self.box.append(fields[1].strip())
-                    elif line.startswith("_cell.length_c"):
-                        fields = line.strip().split()
-                        self.box.append(fields[1].strip())
-                    elif line.startswith("_cell.angle_alpha"):
-                        fields = line.strip().split()
-                        self.box.append(fields[1].strip())
-                    elif line.startswith("_cell.angle_beta"):
-                        fields = line.strip().split()
-                        self.box.append(fields[1].strip())
-                    elif line.startswith("_cell.angle_gamma"):
-                        fields = line.strip().split()
-                        self.box.append(fields[1].strip())
-                    elif line.startswith("HETATM"):
-                        atom = {}
-                        fields = line.strip().split()
-                        atom['n'] = int(fields[1])
-                        atom['name'] = fields[3].strip()
-                        atom["mol"] = fields[4].strip()
-                        atom['seq'] = int(fields[5])
-                        atom['chain'] = int(fields[6].strip())
-                        atom['x'] = float(fields[7])
-                        atom['y'] = float(fields[8])
-                        atom['z'] = float(fields[9])
-                        atom['ele'] = fields[2].strip()
-                        atom['charge'] = float(fields[10])
-                        atom['nH'] = 0      # number of bonded H
-                        atom['type'] = ''   # non-bonded type
-                        atom['class'] = ''  # bonded type
-                        self.atoms.append(atom)
-                    elif line.startswith("CONECT"):
-                        fields = line.strip().split()
-                        atom_i = [int(fields[1]), fields[3].strip()]
-                        atom_j = [int(fields[2]), fields[4].strip()]
-                        i = None
-                        j = None
-                        for k in range (0, len(self.atoms)):
-                            if self.atoms[k]['seq'] == atom_i[0]:
-                                if self.atoms[k]['name'] == atom_i[1]:
-                                    i = k
-                            if self.atoms[k]['seq'] == atom_j[0]:
-                                if self.atoms[k]['name'] == atom_j[1]:
-                                    j = k
-                        self.bonds.append({'i': i, 'j': j})
-            self.natom = len(self.atoms)
+            readpdbx(self, pdbfile)
 
     def writepdb(self, pdbfile):
         '''write topology to PDB file'''
-
         with open(pdbfile, 'w') as f:
             f.write('TITLE     created by polxml\n')
             f.write('REMARK    includes Drude particles\n')
@@ -565,10 +664,10 @@ def main():
                         help = 'input OpenMM xml file (default: field.xml)')
     parser.add_argument('-ox', '--outxml', default = 'field-p.xml',
                         help = 'output OpenMM xml file (default: field-p.xml)')
-    parser.add_argument('-ip', '--inpdb', default = 'config.mmcif',
-                        help = 'PDB or PDBx/mmcif file with configuration (default: config.mmcif)')
-    parser.add_argument('-op', '--outpdb', default = 'config-p.mmcif',
-                        help = 'PDB or PDBx/mmcif file with configuration (default: config-p.mmcif)')
+    parser.add_argument('-ip', '--inpdb', default = 'config.pdb',
+                        help = 'PDB or PDBx/mmcif file with configuration (default: config.pdb)')
+    parser.add_argument('-op', '--outpdb', default = 'config-p.pdb',
+                        help = 'PDB or PDBx/mmcif file with configuration (default: config-p.pdb)')
     args = parser.parse_args()
 
     config = Topology(args.inpdb)
@@ -584,7 +683,11 @@ def main():
         config.writepdbx(args.outpdb)
     
     if args.inpdb == 'config.pdb':
-        config.writepdb(args.outpdb)
+        pdb_limit = (config.natom + config.ndrude)
+        if pdb_limit > 99999:
+            raise RuntimeError("System too large for PDB format, use PDBx/mmcif files")
+        else:
+            config.writepdb(args.outpdb)
 
     print('configuration written to', args.outpdb)
 
