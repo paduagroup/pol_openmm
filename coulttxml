@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # Create code to add TT damping between Drude dipoles in OpenMM
-# Vinicius Piccoli, Agilio Padua <agilio.padua@ens-lyon.fr>, 2024/02/22
+# Vinicius Piccoli, Agilio Padua <agilio.padua@ens-lyon.fr>, 2024/01/22
 
 import sys
 import xml.etree.ElementTree as ET
@@ -42,16 +42,38 @@ def count_molecules_from_pdb(pdb_filename):
     return numbers
 
 def count_molecules_from_pdbx(pdbx_filename):
-    '''Count molecules in PDB file'''
+    '''Count molecules in PDBx/mmcif file'''
 
     molecule_counts = {}
+
+    # First read to understand the structure of the PDBx/mmcif file
     with open(pdbx_filename, 'r') as file:
-        line = file.readline()
+        columns = []
+        resname = None
+        nres = None
         for line in file:
-            if line.startswith('HETATM'):
+        # Read the available categories in the PDBx/mmcif and store them in a "table of contents"
+            if line.startswith('_atom'):
                 fields = line.strip().split()
-                residue_name = fields[4].strip()
-                molecule_number = int(fields[5])
+                columns.append(fields[0].strip())
+        # Find indexes of columns with residue name and residue number
+        for j in range (0,len(columns)):
+            if columns[j] == '_atom_site.label_comp_id':
+                resname = int(j)
+            if columns[j] == '_atom_site.label_seq_id':
+                nres = int(j)
+        if resname == None:
+            raise RuntimeError("Expected '_atom_site.label_comp_id' data in PDBx/mmcif config file")
+        if nres == None:
+            raise RuntimeError("Expected '_atom_site.label_seq_id' data in PDBx/mmcif config file")
+    
+    # Second read to pick data of interest 
+    with open(pdbx_filename, 'r') as file:
+        for line in file:
+            fields = line.strip().split()
+            if len(fields) == len(columns):
+                residue_name = fields[resname].strip()
+                molecule_number = int(fields[nres])
                 if residue_name not in molecule_counts:
                     molecule_counts[residue_name] = 1
                 else:
@@ -99,7 +121,7 @@ system.addForce(CoulTT)
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: coulttxml field-p.xml config-p.pdb/config.mmcif")
+        print("Usage: coulttxml field-p.xml [config-p.pdb | config-p.mmcif]")
         sys.exit(1)
 
     xml_file = sys.argv[1]
