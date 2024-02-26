@@ -2,6 +2,8 @@
 
 These tools follow the same procedure as in [paduagroup/clandpol](https://github.com/paduagroup/clandpol) to create input files for polarizable simulations, so for more detailed information check the instructions there.
 
+**Attention**: please use with a recent version of `fftool` (no older than 02/2024) since there were some changes in the format of the xml files.
+
 ## Creating Input Files
 
 1. Use `fftool` and `packmol` as usual, only in the second round give the `-x --type` options:
