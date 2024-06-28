@@ -32,7 +32,7 @@ def count_molecules_from_pdb(pdb_filename):
                 residue_name = line[17:20].strip()
                 molecule_number = intfromhexiflarge(line[22:26])
                 if residue_name not in molecule_counts:
-                    molecule_counts[residue_name] = 1
+                    molecule_counts[residue_name] = molecule_number
                 else:
                     if molecule_number > molecule_counts[residue_name]:
                         molecule_counts[residue_name] = molecule_number
