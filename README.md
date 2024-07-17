@@ -37,9 +37,9 @@ These tools follow the same procedure as in [paduagroup/clandpol](https://github
 
 5. If necessary add Coulomb damping between charges and induced dipoles. This is often required to avoid the polarization catastrophe in systems with strong hydrogen bonds or densely-charged ions. The following script creates OpenMM code implementing the Tang-Toennies damping function:
 
-        coulttxml field-p.xml config-p.pdb
+        coulttxml --xml field-p.xml --pdb config-p.pdb [--core]
 
-The code generated is to be included in the OpenMM script (the atoms involved have to be identified).
+The code generated is to be included in the OpenMM script (the atoms involved have to be identified). The `--core` option uses the actual charge of the core site (and the charges on Drude particles) for TT damping. By default the charge on the core will be the opposite off that on the Drude particle, so that TT damping is between a charges and induced dipoles. 
 
 
 ## Some points worth mentioning
