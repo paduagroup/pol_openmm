@@ -33,6 +33,49 @@ def count_molecules_from_pdb(pdb_filename):
                 residue_name = line[17:20].strip()
                 molecule_number = intfromhexiflarge(line[22:26])
                 if residue_name not in molecule_counts:
+                    molecule_counts[residue_name] = molecule_number
+                else:
+                    if molecule_number > molecule_counts[residue_name]:
+                        molecule_counts[residue_name] = molecule_number
+    numbers = [molecule_counts[res] for res in molecule_counts]
+    for i in range(len(numbers) - 1, 0, -1):
+        numbers[i] = numbers[i] - numbers[i-1]
+    return numbers
+
+def count_molecules_from_pdbx(pdbx_filename):
+    '''Count molecules in PDBx/mmcif file'''
+
+    molecule_counts = {}
+
+    # First read to understand the structure of the PDBx/mmcif file
+    with open(pdbx_filename, 'r') as file:
+        columns = []
+        resname = None
+        nres = None
+        for line in file:
+        # Read the available categories in the PDBx/mmcif and store them in a "table of contents"
+            if line.startswith('_atom'):
+                fields = line.strip().split()
+                columns.append(fields[0].strip())
+        # Find indexes of columns with residue name and residue number
+        for j in range (0,len(columns)):
+            if columns[j] == '_atom_site.label_comp_id':
+                resname = int(j)
+            if columns[j] == '_atom_site.label_seq_id':
+                nres = int(j)
+        if resname == None:
+            raise RuntimeError("Expected '_atom_site.label_comp_id' data in PDBx/mmcif config file")
+        if nres == None:
+            raise RuntimeError("Expected '_atom_site.label_seq_id' data in PDBx/mmcif config file")
+    
+    # Second read to pick data of interest 
+    with open(pdbx_filename, 'r') as file:
+        for line in file:
+            fields = line.strip().split()
+            if len(fields) == len(columns):
+                residue_name = fields[resname].strip()
+                molecule_number = int(fields[nres])
+                if residue_name not in molecule_counts:
                     molecule_counts[residue_name] = 1
                 else:
                     if molecule_number > molecule_counts[residue_name]:
@@ -95,12 +138,15 @@ def main():
     residues_xml = root.find('Residues').findall('Residue')
     residue_names_xml = [residue.attrib['name'] for residue in residues_xml]
 
-    print("configuration from", args.pdb)
-    num_molecules = count_molecules_from_pdb(args.pdb)
+    num_molecules = count_molecules_from_pdb(pdb_file)
 
-    # Check if the number of residues matches the number of types in the PDB file
+    if sys.argv[2] == 'config-p.mmcif':
+        pdbx_file = sys.argv[2]
+        num_molecules = count_molecules_from_pdbx(pdbx_file)
+
+    # Check if the number of residues matches the number of types in the PDB or PDBx file
     if len(residue_names_xml) != len(num_molecules):
-        print("Error: The number of different residues in the XML does not match the count from the PDB file.")
+        print("Error: The number of different residues in the XML does not match the count from the PDB or PDBx file.")
         sys.exit(1)
 
     with open('addCoulTT.py', 'w') as f:
