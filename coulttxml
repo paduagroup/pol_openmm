@@ -138,11 +138,11 @@ def main():
     residues_xml = root.find('Residues').findall('Residue')
     residue_names_xml = [residue.attrib['name'] for residue in residues_xml]
 
-    num_molecules = count_molecules_from_pdb(pdb_file)
 
-    if sys.argv[2] == 'config-p.mmcif':
-        pdbx_file = sys.argv[2]
-        num_molecules = count_molecules_from_pdbx(pdbx_file)
+    if 'pdb' in args.pdb:
+        num_molecules = count_molecules_from_pdb(args.pdb)
+    elif 'mmcif' in args.pdb:
+        num_molecules = count_molecules_from_pdbx(args.pdb)
 
     # Check if the number of residues matches the number of types in the PDB or PDBx file
     if len(residue_names_xml) != len(num_molecules):
