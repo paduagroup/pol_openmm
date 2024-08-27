@@ -280,10 +280,10 @@ class Topology(object):
         self.natom = 0
         self.ndrude = 0
         
-        if pdbfile == 'config.pdb':
+        if '.pdb' in pdbfile:
             readpdb(self, pdbfile)
 
-        if pdbfile == 'config.mmcif':
+        if '.mmcif' in pdbfile:
             readpdbx(self, pdbfile)
 
     def writepdb(self, pdbfile):
