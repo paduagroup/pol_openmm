@@ -679,10 +679,10 @@ def main():
     ff.write(args.outxml)       # removes 'core', so use after config.polarize()
     print('polarizable force field written to', args.outxml)
 
-    if args.inpdb == 'config.mmcif':
+    if '.mmcif' in args.inpdb:
         config.writepdbx(args.outpdb)
     
-    if args.inpdb == 'config.pdb':
+    if '.pdb' in args.inpdb:
         pdb_limit = (config.natom + config.ndrude)
         if pdb_limit > 99999:
             raise RuntimeError("System too large for PDB format, use PDBx/mmcif files")
