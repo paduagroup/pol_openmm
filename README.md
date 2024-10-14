@@ -12,13 +12,13 @@ These tools follow the same procedure as in [paduagroup/clandpol](https://github
         packmol < pack.inp
         fftool 200 ch.xyz 200 Cl.zmat 400 EG.zmat -b 55 -x --type
 
-    This creates `field.xml` and `config.pdb`.
+    This creates `field.xml` and `config.pdb` (and a `config.mmcif` for large systems, see section below)
 
 2. Add Drude particles using the `polxml` script (analogous to the `polarizer` script from [paduagroup/clandpol](https://github.com/paduagroup/clandpol)). Supposing an `alpha.ff` force field file describing the Drude parameters is present, run
 
         polxml
 
-    This  creates files `field-p.xml` and `config-p.pdb` with Drude particles added after each core and the necessary force field terms. These files should run with OpenMM.
+    This creates files `field-p.xml` and `config-p.pdb` with Drude particles added after each core and the necessary force field terms. These files should run with OpenMM.
 
 3. If necessary scale the LJ potentials, for which the fragment database `fragment.ff` and fragment molecular files are required (in this example the additional `meoh.zmat` for the fragments of ethyleneglycol). A `frag.inp` file specifying which atoms belong to which fragments needs to be prepared. The identification is by atom name:
 
@@ -41,6 +41,36 @@ These tools follow the same procedure as in [paduagroup/clandpol](https://github
 
 The code generated is to be included in the OpenMM script (the atoms involved have to be identified). The `--core` option uses the actual charge of the core site (and the charges on Drude particles) for TT damping. By default the charge on the core will be the opposite off that on the Drude particle, so that TT damping is between a charges and induced dipoles. 
 
+### Input files for large systems (more than 99 999 particles)
+
+PDB files use constrained columns which forbid the numbering of more than 99 999 particles (Drudes included). For larger systems, an option is implemented in the previous tools to use the PDBx/mmcif format. The procedure is almost the same:
+
+1. Use `fftool` and `packmol` as usual with the `-x --type` options:
+
+        fftool 200 ch.xyz 200 Cl.zmat 400 EG.zmat -b 55
+        packmol < pack.inp
+        fftool 200 ch.xyz 200 Cl.zmat 400 EG.zmat -b 55 -x --type
+
+This creates `field.xml` and `config.mmcif`
+
+2. Add Drude particles using the `polxml` script. It is necessary to specify that the PDBx/mmcif format is used with the options `-ip config.mmcif` giving the name of the input file and `-op config-p.mmcif` giving the one of the output. Supposing an `alpha.ff` force field file describing the Drude parameters is present, run
+
+        polxml -ip config.mmcif -op config-p.mmcif
+    
+    This creates files `field-p.xml` and `config-p.mmcif` with Drude particles added after each core and the necessary force field terms.
+
+3. If necessary scale the LJ potentials with the same procedure than described above. It will generate `field-p-sc.xml`
+
+4. Tun OpenMM using the `field-p-sc.xml` and `config-p.mmcif` as force field and topology. The OpenMM input script should include something similar to:
+
+        forcefield = app.ForceField('field-p.xml')
+        config = app.PDBxFile('config-p.mmcif')
+
+5. If necessary damp at short range charges-dipoles Coulombic interactions with a Tang-Toennis damping function:
+
+        coulttxml --xml field-p.xml --pdb config-p.mmcif [--core]
+
+The code generated is to be included in the OpenMM script (the atoms involved have to be identified). The `--core` option uses the actual charge of the core site (and the charges on Drude particles) for TT damping. By default the charge on the core will be the opposite off that on the Drude particle, so that TT damping is between charges and induced dipoles.
 
 ## Some points worth mentioning
 
