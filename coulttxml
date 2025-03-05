@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # Create code to add TT damping between Drude dipoles in OpenMM
-# Vinicius Piccoli, Agilio Padua <agilio.padua@ens-lyon.fr>, 2024/07/17
+# Mathieu Cancade, Vinicius Piccoli, Agilio Padua <agilio.padua@ens-lyon.fr>, 2025/03/05
 
 import sys
 import argparse
@@ -155,7 +155,7 @@ def main():
         sys.exit(1)
 
     if args.s is not None:
-        with open("omm-p-sc.py", 'w') as outputfile:
+        with open("omm-p-tt.py", 'w') as outputfile:
             with open(args.s, 'r') as file:
                 data = file.readlines()
                 line = 0
@@ -196,8 +196,8 @@ def main():
                         outputfile.write(data[line])
                     
                     line = line +1
-        
-        print("Tang-Toennis parameters written to omm-p-sc.py")
+
+        print("Tang-Toennis parameters written to omm-p-tt.py")
 
     elif args.s is None:
         with open('addCoulTT.py', 'w') as f:
