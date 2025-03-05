@@ -196,7 +196,7 @@ def main():
                         outputfile.write(data[line])
                     
                     line = line +1
-        
+
         print("Tang-Toennis parameters written to omm-p-tt.py")
 
     elif args.s is None:

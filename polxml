@@ -280,10 +280,10 @@ class Topology(object):
         self.natom = 0
         self.ndrude = 0
         
-        if pdbfile == 'config.pdb':
+        if '.pdb' in pdbfile:
             readpdb(self, pdbfile)
 
-        if pdbfile == 'config.mmcif':
+        if '.mmcif' in pdbfile:
             readpdbx(self, pdbfile)
 
     def writepdb(self, pdbfile):
@@ -365,6 +365,126 @@ class Topology(object):
                     f.write(f'CONECT {label_seq_id_j:8d} {label_seq_id_i:8d} '
                             f'{label_atom_id_j:5s} {label_atom_id_i:5s} 0 0 covale\n')
             f.write('data_\n')
+
+    def rewrite_openmm(self, omm_script, config_input):
+        with open("omm-p.py", 'w') as outputfile:
+            with open(omm_script, 'r') as file:
+                data = file.readlines()
+                line = 0
+                while line < len(data):
+                    count = 0
+                    if data[line] == "# created by fftool\n":
+                        outputfile.write("# created by fftool and polxml\n")
+                        outputfile.write('# {:d} atoms /'.format(self.natom))
+                        outputfile.write(' {:d} Drude particles //\n\n'.format(self.ndrude))
+                        del data[line:line+3]
+
+                    if data[line] == "field = 'field.xml'\n":
+                        outputfile.write("field = 'field-p.xml'\n")
+                        count = count+1
+                    
+                    if data[line] == "config = 'config.pdb'\n":
+                        if '.mmcif' in config_input:
+                            outputfile.write("config = 'config-p.mmcif'\n")
+                            count = count+1
+                        else :
+                            outputfile.write("config = 'config-p.pdb'\n")
+                            count = count+1
+                    
+                    if data[line] == "config = 'config.mmcif'\n":
+                        outputfile.write("config = 'config-p.mmcif'\n")
+                        count = count+1
+
+                    if data[line] == "pdb = app.PDBFile(config)\n":
+                        if '.mmcif' in config_input:
+                            outputfile.write("#pdb = app.PDBFile(config)\n")
+                            outputfile.write("# If PDBx/mmCIF format is used as config file:\n")
+                            outputfile.write("pdb = app.PDBxFile(config)\n\n")
+                            del data[line:line+3]
+                            count = count+1
+                    
+                    if data[line] == "### Integrator selection ###\n":
+                        del data[line:line+5]
+                        outputfile.write("### Integrator selection ###\n")
+                        outputfile.write("#print('# Nose-Hoover integrator')\n")
+                        outputfile.write("#integrator = openmm.NoseHooverIntegrator(temperature, 5/unit.picosecond, 1*unit.femtosecond)\n")
+                        outputfile.write("print('Drude Nose-Hoover integrator', temperature)\n")
+                        outputfile.write("integrator = openmm.DrudeNoseHooverIntegrator(temperature, 5/unit.picosecond,\n")
+                        outputfile.write("    1*unit.kelvin, 1/unit.picosecond, 1*unit.femtosecond)\n")
+                        outputfile.write("#print('# Drude Langevin integrator')\n")
+                        outputfile.write("#integrator = openmm.DrudeLangevinIntegrator(temperature, 5/unit.picosecond,\n")
+                        outputfile.write("#    1*unit.kelvin, 20/unit.picosecond, 1*unit.femtosecond)\n")
+                        outputfile.write("integrator.setMaxDrudeDistance(0.2*unit.angstrom)\n")
+                        outputfile.write("print('#   max Drude distance', integrator.getMaxDrudeDistance())\n\n")
+                        count = count+1
+
+                    if data[line] == "### Run simulation ###\n":
+                        del data[line:line+4]
+                        outputfile.write("### Constants ###\n")
+                        outputfile.write("kB = unit.BOLTZMANN_CONSTANT_kB/(unit.joule/unit.kelvin)\n")
+                        outputfile.write("NA = unit.AVOGADRO_CONSTANT_NA*unit.mole\n\n")
+
+                        outputfile.write("### Drude section ###\n")
+                        outputfile.write("iat = [ i for i, atom in enumerate(modeller.topology.atoms()) if atom.name[0] != 'D' ]\n")
+                        outputfile.write("idr = [ i for i, atom in enumerate(modeller.topology.atoms()) if atom.name[0] == 'D' ]\n")
+                        outputfile.write("nat = len(iat)\n")
+                        outputfile.write("ndr = len(idr)\n\n")
+
+                        outputfile.write("nall = modeller.topology.getNumAtoms()\n")
+                        outputfile.write("mall = np.array([ system.getParticleMass(i)/unit.dalton for i in range(nall) ])\n\n")
+                        
+                        outputfile.write("ncons = system.getNumConstraints()\n\n")
+
+                        outputfile.write("# Reduced mass of DC-DP pairs\n")
+                        outputfile.write("mu = np.zeros(nall)\n")
+                        outputfile.write("for i in idr:\n")
+                        outputfile.write("    mu[i] = 1.0/(1.0/mall[i-1] + 1.0/mall[i])\n")
+                        outputfile.write("mu = mu.reshape((nall, 1))\n")
+                        outputfile.write("vdr = np.zeros((nall, 3))\n\n")
+
+                        outputfile.write("# Add Drude masses back to cores\n")
+                        outputfile.write("mat = np.copy(mall)\n")
+                        outputfile.write("for i in idr:\n")
+                        outputfile.write("    mat[i-1] += 0.4\n")
+                        outputfile.write("mat = mat.take(iat)\n")
+                        outputfile.write("mat = mat.reshape((nat, 1))\n\n")
+
+                        outputfile.write("mall = mall.reshape((nall, 1))\n\n")
+
+                        outputfile.write("print('#', nat, 'atoms', ndr, 'DP', ncons, 'constraints')\n")
+                        outputfile.write("print('# running...')\n\n")
+
+                        outputfile.write("dof_all = 3*nall - ncons\n")
+                        outputfile.write("dof_at = 3*nat - ncons\n")
+                        outputfile.write("dof_dr = 3*ndr\n\n")
+
+                        outputfile.write("### Run simulation ###\n")
+                        outputfile.write("for i in range(10):\n")
+                        outputfile.write("    sim.step(1000)\n")
+                        outputfile.write("    state = sim.context.getState(getVelocities=True)\n")
+                        outputfile.write("    vel = state.getVelocities(asNumpy=True)/(unit.nanometer/unit.picosecond)\n")
+                        outputfile.write("    Tall = np.sum(mall*vel**2)/(dof_all*kB)*(1e3/NA)*unit.kelvin\n")
+                        outputfile.write("    vat = vel.take(iat, axis=0)\n")
+                        outputfile.write("    Tat = np.sum(mat*vat**2)/(dof_at*kB)*(1e3/NA)*unit.kelvin\n\n")
+                        
+                        outputfile.write("    for i in idr:\n")
+                        outputfile.write("        vdr[i] = vel[i] - vel[i-1]\n")
+                        outputfile.write("    Tdr = np.sum(mu*vdr**2)/(dof_dr*kB)*(1e3/NA)*unit.kelvin\n")
+                        outputfile.write("    print('# Tall', Tall, 'Tatoms', Tat, 'Tdrude', Tdr)\n\n")
+                        count = count+1
+                    
+                    if data[line] == "### Store last configuration (PDB or PDBx format) ###\n":
+                        if '.mmcif' in config_input:
+                            outputfile.write("### Store last configuration (PDB or PDBx format) ###\n")
+                            outputfile.write("#app.PDBFile.writeFile(sim.topology, coords, open('last.pdb', 'w'))\n")
+                            outputfile.write("app.PDBxFile.writeFile(sim.topology, coords, open('last.mmcif', 'w'))\n\n")
+                            del data[line:line+3]
+                            count = count+1
+                    
+                    elif count == 0:
+                        outputfile.write(data[line])
+                    
+                    line = line +1
 
     def settypes(self, ff):
         '''assign types from ff to atoms in topology'''
@@ -644,7 +764,7 @@ class Forcefield(object):
                     break
 
         ljforce = self.root.find('LennardJonesForce')
-        if ljforce:
+        if ljforce is not None:
             dp = ET.SubElement(ljforce, 'Atom')
             dp.set('class', 'DRUD')
             dp.set('sigma', '1.0')
@@ -668,6 +788,8 @@ def main():
                         help = 'PDB or PDBx/mmcif file with configuration (default: config.pdb)')
     parser.add_argument('-op', '--outpdb', default = 'config-p.pdb',
                         help = 'PDB or PDBx/mmcif file with configuration (default: config-p.pdb)')
+    parser.add_argument('-s', '--inscript',
+                        help = 'input OpenMM script')
     args = parser.parse_args()
 
     config = Topology(args.inpdb)
@@ -679,10 +801,10 @@ def main():
     ff.write(args.outxml)       # removes 'core', so use after config.polarize()
     print('polarizable force field written to', args.outxml)
 
-    if args.inpdb == 'config.mmcif':
+    if '.mmcif' in args.inpdb:
         config.writepdbx(args.outpdb)
     
-    if args.inpdb == 'config.pdb':
+    if '.pdb' in args.inpdb:
         pdb_limit = (config.natom + config.ndrude)
         if pdb_limit > 99999:
             raise RuntimeError("System too large for PDB format, use PDBx/mmcif files")
@@ -690,6 +812,10 @@ def main():
             config.writepdb(args.outpdb)
 
     print('configuration written to', args.outpdb)
+    
+    if args.inscript is not None:
+        config.rewrite_openmm(args.inscript, args.inpdb)
+        print('OpenMM python script modified to omm-p.py')
 
 if __name__ == '__main__':
     main()
