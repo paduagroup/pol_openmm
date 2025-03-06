@@ -34,7 +34,7 @@ new bonds to the xml file and new particles to the pdb file.
 
 def hexiflarge(i, ndig):
     """
-    Convert number to hex starting with A if more than n digits.
+    Convert number to hex starting with A000... if more than n digits.
     VMD, OpenMM convention in PDB files with natom > 99999, nmol > 9999
     """
 
