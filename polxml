@@ -121,98 +121,149 @@ def readpdb(Topology, pdbfile):
         Topology.natom = len(Topology.atoms)
     
 def readpdbx(Topology, pdbxfile):
-    """Optimized function to read topology from PDBx/mmcif"""
-    
-    # Column index storage
-    atoms_columns = {}
-    bonds_columns = {}
-
-    # Read the file once
+    '''read topology from PDBx/mmcif'''
     with open(pdbxfile, 'r') as f:
-        lines = f.readlines()
+        line = f.readline()
+        atoms_columns = []
+        bonds_columns = []
+            
+        # Storage of columns numbers
+        site_id = None
+        type_symbol = None
+        atom_id = None
+        comp_id = None
+        seq_id = None
+        asym_id = None
+        Cartn_x = None
+        Cartn_y = None
+        Cartn_z = None
+        formal_charge = None
 
-    # First pass: Identify column indices
-    for line in lines:
-        fields = line.strip().split()
-        if not fields:
-            continue
-        if line.startswith('_atom'):
-            atoms_columns[fields[0].strip()] = len(atoms_columns)
-        elif line.startswith('_struct'):
-            bonds_columns[fields[0].strip()] = len(bonds_columns)
+        ptnr1_label_seq_id = None
+        ptnr2_label_seq_id = None
+        ptnr1_label_atom_id = None
+        ptnr2_label_atom_id = None
 
-    # Required atom column mappings
-    required_atom_fields = {
-        '_atom_site.id': 'site_id',
-        '_atom_site.type_symbol': 'type_symbol',
-        '_atom_site.label_atom_id': 'atom_id',
-        '_atom_site.label_comp_id': 'comp_id',
-        '_atom_site.label_seq_id': 'seq_id',
-        '_atom_site.label_asym_id': 'asym_id',
-        '_atom_site.Cartn_x': 'Cartn_x',
-        '_atom_site.Cartn_y': 'Cartn_y',
-        '_atom_site.Cartn_z': 'Cartn_z',
-        '_atom_site.pdbx_formal_charge': 'formal_charge'
-    }
+        for line in f:
+        # Read available categories in PDBx/mmcif file and store them in a "table of contents"
+            if line.startswith('_atom'):
+                fields = line.strip().split()
+                atoms_columns.append(fields[0].strip())
+            if line.startswith('_struct'):
+                fields = line.strip().split()
+                bonds_columns.append(fields[0].strip())
 
-    # Required bond column mappings
-    required_bond_fields = {
-        '_struct_conn.ptnr1_label_seq_id': 'ptnr1_label_seq_id',
-        '_struct_conn.ptnr2_label_seq_id': 'ptnr2_label_seq_id',
-        '_struct_conn.ptnr1_label_atom_id': 'ptnr1_label_atom_id',
-        '_struct_conn.ptnr2_label_atom_id': 'ptnr2_label_atom_id'
-    }
+        # Atoms section
+        for j in range (0,len(atoms_columns)):
+            if atoms_columns[j] == '_atom_site.id':
+                site_id = int(j)
+            if atoms_columns[j] == '_atom_site.type_symbol':
+                type_symbol = int(j)
+            if atoms_columns[j] == '_atom_site.label_atom_id':
+                atom_id = int(j)
+            if atoms_columns[j] == '_atom_site.label_comp_id':
+                comp_id = int(j)
+            if atoms_columns[j] == '_atom_site.label_seq_id':
+                seq_id = int(j)
+            if atoms_columns[j] == '_atom_site.label_asym_id':
+                asym_id = int(j)
+            if atoms_columns[j] == '_atom_site.Cartn_x':
+                Cartn_x = int(j)
+            if atoms_columns[j] == '_atom_site.Cartn_y':
+                Cartn_y = int(j)
+            if atoms_columns[j] == '_atom_site.Cartn_z':
+                Cartn_z = int(j)
+            if atoms_columns[j] == '_atom_site.pdbx_formal_charge':
+                formal_charge = int(j)
+        if site_id == None:
+            raise RuntimeError("Expected '_atom_site.id' data in PDBx/mmcif config file")
+        if type_symbol == None:
+            raise RuntimeError("Expected '_atom_site.type_symbol' data in PDBx/mmcif config file")
+        if atom_id == None:
+            raise RuntimeError("Expected '_atom_site.label_atom_id' data in PDBx/mmcif config file")
+        if comp_id == None:
+            raise RuntimeError("Expected '_atom_site.label_comp_id' data in PDBx/mmcif config file")
+        if seq_id == None:
+            raise RuntimeError("Expected '_atom_site.label_seq_id' data in PDBx/mmcif config file")
+        if asym_id == None:
+            raise RuntimeError("Expected '_atom_site.label_asym_idl' data in PDBx/mmcif config file")
+        if Cartn_x == None:
+            raise RuntimeError("Expected '_atom_site.Cartn_x' data in PDBx/mmcif config file")
+        if Cartn_y == None:
+            raise RuntimeError("Expected '_atom_site.Cartn_y' data in PDBx/mmcif config file")
+        if Cartn_z == None:
+            raise RuntimeError("Expected '_atom_site.Cartn_z' data in PDBx/mmcif config file")
+        if formal_charge == None:
+            raise RuntimeError("Expected '_atom_site.pdbx_formal_charge' data in PDBx/mmcif config file")
+            
+        # Bonds section
+        for j in range (0,len(bonds_columns)):
+            if bonds_columns[j] == '_struct_conn.ptnr1_label_seq_id':
+                ptnr1_label_seq_id = int(j)
+            if bonds_columns[j] == '_struct_conn.ptnr2_label_seq_id':
+                ptnr2_label_seq_id = int(j)
+            if bonds_columns[j] == '_struct_conn.ptnr1_label_atom_id':
+                ptnr1_label_atom_id = int(j)
+            if bonds_columns[j] == '_struct_conn.ptnr2_label_atom_id':
+                ptnr2_label_atom_id = int(j)
+        if ptnr1_label_seq_id == None:
+            raise RuntimeError("Expected '_struct_conn.ptnr1_label_seq_id' data in PDBx/mmcif config file")
+        if ptnr2_label_seq_id == None:
+            raise RuntimeError("Expected '_struct_conn.ptnr2_label_seq_id' data in PDBx/mmcif config file")
+        if ptnr1_label_atom_id == None:
+            raise RuntimeError("Expected '_struct_conn.ptnr1_label_atom_id' data in PDBx/mmcif config file")
+        if ptnr2_label_atom_id == None:
+            raise RuntimeError("Expected '_struct_conn.ptnr2_label_atom_id' data in PDBx/mmcif config file")
+        
+    # Second read to pick data of interest 
+    with open(pdbxfile, 'r') as file:
+        line = file.readline()
+        for line in file:
+            fields = line.strip().split()
 
-    # Validate required columns and map indices
-    atom_indices = {name: atoms_columns[key] for key, name in required_atom_fields.items()}
-    bond_indices = {name: bonds_columns[key] for key, name in required_bond_fields.items()}
-
-    # Second pass: Extract data
-    for line in lines:
-        fields = line.strip().split()
-        if not fields:
-            continue
-
-        # Box parameters
-        if line.startswith("_cell.length_") or line.startswith("_cell.angle_"):
-            Topology.box.append(fields[1].strip())
-
-        # Atoms data
-        elif len(fields) == len(atoms_columns):
-            atom = {
-                'n': int(fields[atom_indices['site_id']]),
-                'name': fields[atom_indices['atom_id']].strip(),
-                'mol': fields[atom_indices['comp_id']].strip(),
-                'seq': int(fields[atom_indices['seq_id']]),
-                'chain': int(fields[atom_indices['asym_id']].strip()),
-                'x': float(fields[atom_indices['Cartn_x']]),
-                'y': float(fields[atom_indices['Cartn_y']]),
-                'z': float(fields[atom_indices['Cartn_z']]),
-                'ele': fields[atom_indices['type_symbol']].strip(),
-                'charge': float(fields[atom_indices['formal_charge']]),
-                'nH': 0,
-                'type': '',
-                'class': ''
-            }
-            Topology.atoms.append(atom)
-
-        # Bonds data
-        elif len(fields) == len(bonds_columns):
-            atom_i = (int(fields[bond_indices['ptnr1_label_seq_id']]), fields[bond_indices['ptnr1_label_atom_id']].strip())
-            atom_j = (int(fields[bond_indices['ptnr2_label_seq_id']]), fields[bond_indices['ptnr2_label_atom_id']].strip())
-
-            # Find matching atoms in the topology
-            i, j = None, None
-            for k, atom in enumerate(Topology.atoms):
-                if (atom['seq'], atom['name']) == atom_i:
-                    i = k
-                if (atom['seq'], atom['name']) == atom_j:
-                    j = k
-                if i is not None and j is not None:
-                    break  # Stop searching if both indices are found
-
-            Topology.bonds.append({'i': i, 'j': j})
-
+            if line.startswith("_cell.length_a"):
+                Topology.box.append(fields[1].strip())
+            elif line.startswith("_cell.length_b"):
+                Topology.box.append(fields[1].strip())
+            elif line.startswith("_cell.length_c"):
+                Topology.box.append(fields[1].strip())
+            elif line.startswith("_cell.angle_alpha"):
+                Topology.box.append(fields[1].strip())
+            elif line.startswith("_cell.angle_beta"):
+                Topology.box.append(fields[1].strip())
+            elif line.startswith("_cell.angle_gamma"):
+                Topology.box.append(fields[1].strip())
+                
+            if len(fields) == len(atoms_columns):
+                atom = {}
+                atom['n'] = int(fields[site_id])
+                atom['name'] = fields[atom_id].strip()
+                atom["mol"] = fields[comp_id].strip()
+                atom['seq'] = int(fields[seq_id])
+                atom['chain'] = int(fields[asym_id].strip())
+                atom['x'] = float(fields[Cartn_x])
+                atom['y'] = float(fields[Cartn_y])
+                atom['z'] = float(fields[Cartn_z])
+                atom['ele'] = fields[type_symbol].strip()
+                atom['charge'] = float(fields[formal_charge])
+                atom['nH'] = 0      # number of bonded H
+                atom['type'] = ''   # non-bonded type
+                atom['class'] = ''  # bonded type
+                Topology.atoms.append(atom)
+                
+            if len(fields) == len(bonds_columns):
+                atom_i = [int(fields[ptnr1_label_seq_id]), fields[ptnr1_label_atom_id].strip()]
+                atom_j = [int(fields[ptnr2_label_seq_id]), fields[ptnr2_label_atom_id].strip()]
+                i = None
+                j = None
+                for k in range (0, len(Topology.atoms)):
+                    if Topology.atoms[k]['seq'] == atom_i[0]:
+                        if Topology.atoms[k]['name'] == atom_i[1]:
+                            i = k
+                    if Topology.atoms[k]['seq'] == atom_j[0]:
+                        if Topology.atoms[k]['name'] == atom_j[1]:
+                            j = k
+                Topology.bonds.append({'i': i, 'j': j})
     Topology.natom = len(Topology.atoms)
 
 # -------------------------------------------- 
@@ -772,7 +823,7 @@ def main():
             config.writepdb(args.outpdb)
 
     print('configuration written to', args.outpdb)
-    
+
     if args.inscript is not None:
         config.rewrite_openmm(args.inscript, args.inpdb)
         print('OpenMM python script modified to omm-p.py')
