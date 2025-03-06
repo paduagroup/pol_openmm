@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # Create code to add TT damping between Drude dipoles in OpenMM
-# Mathieu Cancade, Vinicius Piccoli, Agilio Padua <agilio.padua@ens-lyon.fr>, 2025/03/05
+# Mathieu Cancade, Vinicius Piccoli, Agilio Padua <agilio.padua@ens-lyon.fr>, 2025/03/06
 
 import sys
 import argparse
@@ -154,10 +154,36 @@ def main():
         print("Error: The number of different residues in the XML does not match the count from the PDB or PDBx file.")
         sys.exit(1)
 
+    def write_coultt(outputfile, residue_names_xml, residues_xml, atomtypes_xml, atomtypes_names_xml, light_atoms_mass_cutoff, num_molecules):
+        outputfile.write(before)
+        outputfile.write("# Tang-Toennis screening\n")
+        outputfile.write("# Put flag 1 in 1st or 2nd field in atoms to be screened\n")
+        outputfile.write("# donor (1st field) is the charge, acceptor (2nd field) the induced dipole\n")
+        for residue_xml, count in zip(residue_names_xml, num_molecules):
+            outputfile.write(f"for i in range({count}):\n")
+            atoms = next((res for res in residues_xml if res.attrib['name'] == residue_xml), None).findall('Atom')
+            for i, atom in enumerate(atoms):
+                name = atom.attrib['name']
+                charge = float(atom.attrib['charge'])
+                if not args.core and i < len(atoms) - 1:
+                    nxtname = atoms[i+1].attrib['name']
+                    if nxtname.startswith('D'):
+                        charge = - float(atoms[i+1].attrib['charge'])
+                for k in range(0, len(atomtypes_xml)):
+                    if atom.attrib['type'] == atomtypes_names_xml[k]:
+                        if atomtypes_xml[k].attrib["class"] == "DRUD":
+                            outputfile.write(f"    CoulTT.addParticle([0, 1, {charge:8.5f}]) # {name:4s} {atom.attrib['type']:12s}\n")
+                        elif float(atomtypes_xml[k].attrib["mass"]) < light_atoms_mass_cutoff:
+                            outputfile.write(f"    CoulTT.addParticle([0, 0, {charge:8.5f}]) # {name:4s} {atom.attrib['type']:12s}\n")
+                        elif float(atomtypes_xml[k].attrib["mass"]) > light_atoms_mass_cutoff:
+                            outputfile.write(f"    CoulTT.addParticle([0, 1, {charge:8.5f}]) # {name:4s} {atom.attrib['type']:12s}\n")                
+        outputfile.write(after)
+
     if args.s is not None:
-        with open("omm-p-tt.py", 'w') as outputfile:
-            with open(args.s, 'r') as file:
+        with open(args.s, 'r') as file:
                 data = file.readlines()
+                file.close()
+        with open("omm-p-tt.py", 'w') as outputfile:
                 line = 0
                 while line < len(data):
                     count = 0
@@ -165,67 +191,19 @@ def main():
                         del data[line:line+1]
                         outputfile.write("### Forces ###\n")
                         outputfile.write("# Force settings before creating Simulation\n")
-                        
-                        outputfile.write(before)
-                        outputfile.write("# Tang-Toennis screening\n")
-                        outputfile.write("# Put flag 1 in 1st or 2nd field in atoms to be screened\n")
-                        outputfile.write("# donor (1st field) is the charge, acceptor (2nd field) the induced dipole\n")
-                        for residue_xml, count in zip(residue_names_xml, num_molecules):
-                            outputfile.write(f"for i in range({count}):\n")
-                            atoms = next((res for res in residues_xml if res.attrib['name'] == residue_xml), None).findall('Atom')
-                            for i, atom in enumerate(atoms):
-                                name = atom.attrib['name']
-                                charge = float(atom.attrib['charge'])
-                                if not args.core and i < len(atoms) - 1:
-                                    nxtname = atoms[i+1].attrib['name']
-                                    if nxtname.startswith('D'):
-                                        charge = - float(atoms[i+1].attrib['charge'])
-                                for k in range(0, len(atomtypes_xml)):
-                                    if atom.attrib['type'] == atomtypes_names_xml[k]:
-                                        if atomtypes_xml[k].attrib["class"] == "DRUD":
-                                            outputfile.write(f"    CoulTT.addParticle([0, 1, {charge:8.5f}]) # {name:4s} {atom.attrib['type']:12s}\n")
-                                        elif float(atomtypes_xml[k].attrib["mass"]) < light_atoms_mass_cutoff:
-                                            outputfile.write(f"    CoulTT.addParticle([0, 0, {charge:8.5f}]) # {name:4s} {atom.attrib['type']:12s}\n")
-                                        elif float(atomtypes_xml[k].attrib["mass"]) > light_atoms_mass_cutoff:
-                                            outputfile.write(f"    CoulTT.addParticle([0, 1, {charge:8.5f}]) # {name:4s} {atom.attrib['type']:12s}\n")
-                        
-                        outputfile.write(after)
+                        write_coultt(outputfile, residue_names_xml, residues_xml, atomtypes_xml, atomtypes_names_xml, light_atoms_mass_cutoff, num_molecules)
                         count = count+1
-                    
                     elif count == 0:
                         outputfile.write(data[line])
-                    
                     line = line +1
-
+        
         print("Tang-Toennis parameters written to omm-p-tt.py")
 
     elif args.s is None:
-        with open('addCoulTT.py', 'w') as f:
-            f.write("# OpenMM code to add charge-dipole damping in polarizable simulations\n")
-            f.write(before)
-            # Loop over each residue and its corresponding count from the PDB
-            f.write("# Put flag 1 in 1st or 2nd field in atoms to be screened\n")
-            f.write("# donor (1st field) is the charge, acceptor (2nd field) the induced dipole\n")
-            for residue_xml, count in zip(residue_names_xml, num_molecules):
-                f.write(f"for i in range({count}):\n")
-                atoms = next((res for res in residues_xml if res.attrib['name'] == residue_xml), None).findall('Atom')
-                for i, atom in enumerate(atoms):
-                    name = atom.attrib['name']
-                    charge = float(atom.attrib['charge'])
-                    if not args.core and i < len(atoms) - 1:
-                        nxtname = atoms[i+1].attrib['name']
-                        if nxtname.startswith('D'):
-                            charge = - float(atoms[i+1].attrib['charge'])
-                    for k in range(0, len(atomtypes_xml)):
-                        if atom.attrib['type'] == atomtypes_names_xml[k]:
-                            if atomtypes_xml[k].attrib["class"] == "DRUD":
-                                f.write(f"    CoulTT.addParticle([0, 1, {charge:8.5f}]) # {name:4s} {atom.attrib['type']:12s}\n")
-                            elif float(atomtypes_xml[k].attrib["mass"]) < light_atoms_mass_cutoff:
-                                f.write(f"    CoulTT.addParticle([0, 0, {charge:8.5f}]) # {name:4s} {atom.attrib['type']:12s}\n")
-                            elif float(atomtypes_xml[k].attrib["mass"]) > light_atoms_mass_cutoff:
-                                f.write(f"    CoulTT.addParticle([0, 1, {charge:8.5f}]) # {name:4s} {atom.attrib['type']:12s}\n")
-            f.write(after)
-
+        with open('addCoulTT.py', 'w') as outputfile:
+            outputfile.write("# OpenMM code to add charge-dipole damping in polarizable simulations\n")
+            write_coultt(outputfile, residue_names_xml, residues_xml, atomtypes_xml, atomtypes_names_xml, light_atoms_mass_cutoff, num_molecules)
+        
         print("OpenMM code for CoulTT written to addCoulTT.py")
 
 if __name__ == '__main__':
