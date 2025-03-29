@@ -590,9 +590,14 @@ class System(object):
                         d = next((x for x in ff.dimers if (x.m1.name == self.fragments[i].name and x.m2.name == self.fragments[j].name) or (x.m1.name == self.fragments[j].name and x.m2.name == self.fragments[i].name)), None)
 
                         if d is not None:
-                            self.fragmentpairs.append(FragmentPair(self.fragments[i], self.fragments[j], d.r, d.k_sapt))
+                            #If one of the fragments is already polarized scale by sqrt(k_sapt) (As other half is already taken into account)
+                            if self.fragments[i].pol_model or self.fragments[j].pol_model:
+                                self.fragmentpairs.append(FragmentPair(self.fragments[i], self.fragments[j], d.r, d.k_sapt**0.5))
+                            else:
+                                self.fragmentpairs.append(FragmentPair(self.fragments[i], self.fragments[j], d.r, d.k_sapt))
                         else:
                             raise Exception(f'  error: dimer {self.fragments[i].name} {self.fragments[j].name} not found in {ff.filename}')
+
                     j+=1
                 i+=1
         except Exception as e:
@@ -711,7 +716,7 @@ def main():
     -s value                 - scale all fragments\' sigma by user-defined value \n\
     -s name1 name2 ...       - scale the specified fragments\' sigma by 0.985 \n\
     -s value name1 name2 ... - scale the specified fragments\' sigma by user-defined value')
-    parser.add_argument('-p', '--polarisable', nargs='+', type = str, help = 'already polarisable monomers')
+    parser.add_argument('-p', '--polarisable', nargs='+', type = str.lower, help = 'already polarisable monomers')
 
     args = parser.parse_args()
 
