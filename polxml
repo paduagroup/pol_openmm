@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # polxml.py - add Drude oscillators to OpenMM xml force field file.
 # Agilio Padua <agilio.padua@ens-lyon.fr>
-# version 2025/04/22
+# version 2025/04/24
 
 import argparse
 import random
@@ -614,6 +614,8 @@ class Forcefield(object):
                         break
 
         bdforce = self.root.find('HarmonicBondForce')
+        if bdforce is None:
+            bdforce = ET.SubElement(self.root, 'HarmonicBondForce')
         db = ET.SubElement(bdforce, 'Bond')
         db.set('class1', 'X')
         db.set('class2', 'DRUD')
