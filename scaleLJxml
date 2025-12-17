@@ -590,8 +590,9 @@ class System(object):
                         d = next((x for x in ff.dimers if (x.m1.name == self.fragments[i].name and x.m2.name == self.fragments[j].name) or (x.m1.name == self.fragments[j].name and x.m2.name == self.fragments[i].name)), None)
 
                         if d is not None:
+#                            self.fragmentpairs.append(FragmentPair(self.fragments[i], self.fragments[j], d.r, d.k_sapt))
                             #If one of the fragments is already polarized scale by sqrt(k_sapt) (As other half is already taken into account)
-                            if self.fragments[i].pol_model or self.fragments[j].pol_model:
+                            if d.k_sapt is not None and (self.fragments[i].pol_model or self.fragments[j].pol_model):
                                 self.fragmentpairs.append(FragmentPair(self.fragments[i], self.fragments[j], d.r, d.k_sapt**0.5))
                             else:
                                 self.fragmentpairs.append(FragmentPair(self.fragments[i], self.fragments[j], d.r, d.k_sapt))
