@@ -406,7 +406,7 @@ class Topology(object):
             if nh[i] == -1:
                 nh[i] = n
             elif nh[i] != n:
-                print(f'atom type {at} with different numbers of bonded H')
+                print(f'atom non-bonded type {at} with different numbers of bonded H')
                 exit(1)
 
     def polarize(self, ff, eps=0.02):
