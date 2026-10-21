@@ -8,9 +8,9 @@ These tools follow the same procedure as in [paduagroup/clandpol](https://github
 
 1. Use `fftool` and `packmol` as usual, only in the second round give the `-x --type` options:
 
-        fftool 200 ch.xyz 200 Cl.zmat 400 EG.zmat -b 55
+        fftool 200 ch.xyz 200 Cl.zmat 400 EG.zmat --box 55
         packmol < pack.inp
-        fftool 200 ch.xyz 200 Cl.zmat 400 EG.zmat -b 55 -x --type
+        fftool 200 ch.xyz 200 Cl.zmat 400 EG.zmat --box 55 --xml --types
 
     This creates `field.xml` and `config.pdb` (and a `config.mmcif` for large systems, see section below)
 
