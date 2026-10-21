@@ -33,13 +33,13 @@ These tools follow the same procedure as in [paduagroup/clandpol](https://github
 
     will generate `field-p-sc.xml`
 
-4. Tun OpenMM using the  `field-p-sc.xml` and `config-p.pdb` as force field and topology. Since Drude particles are already present in `config-p.pdb`, it is not necessary to add Drude particles in the OpenMM script, although it should also be possible to use the initial `config.pdb` and have OpenMM add Drude particles with `modeller.addExtraParticles(forcefield)`.
+4. Run OpenMM using the  `field-p-sc.xml` and `config-p.pdb` as force field and topology. Since Drude particles are already present in `config-p.pdb`, it is not necessary to add Drude particles in the OpenMM script, although it should also be possible to use the initial `config.pdb` and have OpenMM add Drude particles with `modeller.addExtraParticles(forcefield)`.
 
 5. If necessary add Coulomb damping between charges and induced dipoles. This is often required to avoid the polarization catastrophe in systems with strong hydrogen bonds or densely-charged ions. The following script creates OpenMM code implementing the Tang-Toennies damping function:
 
         coulttxml --xml field-p.xml --pdb config-p.pdb [--core]
 
-The code generated is to be included in the OpenMM script (the atoms involved have to be identified). The `--core` option uses the actual charge of the core site (and the charges on Drude particles) for TT damping. By default the charge on the core will be the opposite off that on the Drude particle, so that TT damping is between a charges and induced dipoles. 
+The code generated is to be included in the OpenMM script (the atoms involved have to be identified). The `--core` option uses the actual charge of the core site (and the charges on Drude particles) for TT damping. By default the charge on the core will be the opposite off that on the Drude particle, so that TT damping is between charges and induced dipoles. 
 
 ### Input files for large systems (more than 99 999 particles)
 
@@ -61,7 +61,7 @@ This creates `field.xml` and `config.mmcif`
 
 3. If necessary scale the LJ potentials with the same procedure than described above. It will generate `field-p-sc.xml`
 
-4. Tun OpenMM using the `field-p-sc.xml` and `config-p.mmcif` as force field and topology. The OpenMM input script should include something similar to:
+4. Run OpenMM using the `field-p-sc.xml` and `config-p.mmcif` as force field and topology. The OpenMM input script should include something similar to:
 
         forcefield = app.ForceField('field-p.xml')
         config = app.PDBxFile('config-p.mmcif')
@@ -71,6 +71,7 @@ This creates `field.xml` and `config.mmcif`
         coulttxml --xml field-p.xml --pdb config-p.mmcif [--core]
 
 The code generated is to be included in the OpenMM script (the atoms involved have to be identified). The `--core` option uses the actual charge of the core site (and the charges on Drude particles) for TT damping. By default the charge on the core will be the opposite off that on the Drude particle, so that TT damping is between charges and induced dipoles.
+
 
 ## Some points worth mentioning
 
